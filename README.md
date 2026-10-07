@@ -21,7 +21,7 @@ Per una panoramica completa di architettura, moduli, API e scelte progettuali ve
 ## Onboarding
 
 1. Apri l’app → tab `Impostazioni`.
-2. Inserisci IP o mDNS del dispositivo (es. `http://192.168.1.50` o `http://cupolaled.local`).
+2. Inserisci IP o mDNS del dispositivo (es. `http://192.168.4.1` in modalità AP o `http://lightdome.local`).
 3. Premi `Connetti`.
 
 ## Funzioni principali
@@ -48,6 +48,35 @@ Per una panoramica completa di architettura, moduli, API e scelte progettuali ve
 - Stato: `/api/state` (preferito) con fallback `/status`.
 - LIVE: `/set?y=` (0..1023), `/params?brightness=0..100&gamma=1.0..3.0&loop=0|1`.
 - Programmi: `/prog/list`, `/prog/start`, `/prog/stop`, `/prog/delete`.
+
+## Controllo e collaudo da PC
+
+Il firmware espone direttamente API HTTP e una WebUI tecnica. Quando il
+dispositivo usa l'AP `LightDome-Setup`, collegare il PC a quella rete e aprire
+`http://192.168.4.1` nel browser.
+
+Per controllo e test da PowerShell, senza installare dipendenze:
+
+```powershell
+# Test non distruttivo di stato, filesystem e connettività
+.\tools\lightdome.ps1 smoke
+
+# Livello LIVE 0..1023
+.\tools\lightdome.ps1 set -Level 256
+
+# Master brightness, gamma e loop
+.\tools\lightdome.ps1 params -BrightnessPct 80 -Gamma 2.2 -Loop on
+
+# Gestione programmi
+.\tools\lightdome.ps1 programs
+.\tools\lightdome.ps1 start -Name demo
+.\tools\lightdome.ps1 stop
+.\tools\lightdome.ps1 upload -Name demo -File .\demo.ldy
+```
+
+Per un dispositivo già collegato alla LAN usare `-BaseUrl`, per esempio
+`-BaseUrl http://lightdome.local`. Il comando `smoke` esegue soltanto letture;
+gli altri comandi modificano esplicitamente lo stato indicato.
 
 ## Feature flag
 

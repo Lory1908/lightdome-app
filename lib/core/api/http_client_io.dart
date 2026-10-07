@@ -2,14 +2,22 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+Future<String> _readResponse(HttpClientResponse response, Uri uri, Duration timeout) async {
+  final body = await response.transform(utf8.decoder).join().timeout(timeout);
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    throw HttpException('HTTP ${response.statusCode}: $body', uri: uri);
+  }
+  return body;
+}
+
 Future<String> getText(String url, {Duration timeout = const Duration(seconds: 2)}) async {
   final client = HttpClient();
   client.connectionTimeout = timeout;
   try {
-    final req = await client.getUrl(Uri.parse(url)).timeout(timeout);
+    final uri = Uri.parse(url);
+    final req = await client.getUrl(uri).timeout(timeout);
     final resp = await req.close().timeout(timeout);
-    final body = await resp.transform(utf8.decoder).join().timeout(timeout);
-    return body;
+    return _readResponse(resp, uri, timeout);
   } finally {
     client.close();
   }
@@ -25,11 +33,12 @@ Future<String> postJson(String url, Map<String, dynamic> body,
   final client = HttpClient();
   client.connectionTimeout = timeout;
   try {
-    final req = await client.postUrl(Uri.parse(url)).timeout(timeout);
+    final uri = Uri.parse(url);
+    final req = await client.postUrl(uri).timeout(timeout);
     req.headers.set(HttpHeaders.contentTypeHeader, 'application/json');
     req.add(utf8.encode(jsonEncode(body)));
     final resp = await req.close().timeout(timeout);
-    return await resp.transform(utf8.decoder).join().timeout(timeout);
+    return _readResponse(resp, uri, timeout);
   } finally {
     client.close();
   }
@@ -41,11 +50,12 @@ Future<String> postBytes(String url, List<int> bytes,
   final client = HttpClient();
   client.connectionTimeout = timeout;
   try {
-    final req = await client.postUrl(Uri.parse(url)).timeout(timeout);
+    final uri = Uri.parse(url);
+    final req = await client.postUrl(uri).timeout(timeout);
     headers?.forEach(req.headers.set);
     req.add(bytes);
     final resp = await req.close().timeout(timeout);
-    return await resp.transform(utf8.decoder).join().timeout(timeout);
+    return _readResponse(resp, uri, timeout);
   } finally {
     client.close();
   }
@@ -55,9 +65,10 @@ Future<String> deleteText(String url, {Duration timeout = const Duration(seconds
   final client = HttpClient();
   client.connectionTimeout = timeout;
   try {
-    final req = await client.deleteUrl(Uri.parse(url)).timeout(timeout);
+    final uri = Uri.parse(url);
+    final req = await client.deleteUrl(uri).timeout(timeout);
     final resp = await req.close().timeout(timeout);
-    return await resp.transform(utf8.decoder).join().timeout(timeout);
+    return _readResponse(resp, uri, timeout);
   } finally {
     client.close();
   }
@@ -71,7 +82,8 @@ Future<String> postStream(String url, Stream<List<int>> data,
   final client = HttpClient();
   client.connectionTimeout = timeout;
   try {
-    final req = await client.postUrl(Uri.parse(url)).timeout(timeout);
+    final uri = Uri.parse(url);
+    final req = await client.postUrl(uri).timeout(timeout);
     headers?.forEach(req.headers.set);
     if (contentLength != null) {
       req.headers.set(HttpHeaders.contentLengthHeader, contentLength);
@@ -90,8 +102,7 @@ Future<String> postStream(String url, Stream<List<int>> data,
     ));
     await req.addStream(monitored).timeout(timeout);
     final resp = await req.close().timeout(timeout);
-    final body = await resp.transform(utf8.decoder).join().timeout(timeout);
-    return body;
+    return _readResponse(resp, uri, timeout);
   } finally {
     client.close();
   }

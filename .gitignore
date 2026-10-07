@@ -43,3 +43,8 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# PlatformIO firmware artifacts
+firmware/.pio/
+firmware/.vscode/
+firmware/platformio_override.ini
