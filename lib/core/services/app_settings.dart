@@ -2,16 +2,24 @@ import 'package:flutter/foundation.dart';
 
 import '../persistence/prefs.dart';
 
+enum AppThemePreference { system, light, dark }
+
 class AppSettings extends ChangeNotifier {
   static final AppSettings I = AppSettings._();
   AppSettings._();
 
   bool showPreview = true;
   bool showDescriptions = true;
+  AppThemePreference themePreference = AppThemePreference.system;
 
   Future<void> restore() async {
     showPreview = (await Prefs.getString('ui_show_preview')) != '0';
     showDescriptions = (await Prefs.getString('ui_show_desc')) != '0';
+    final savedTheme = await Prefs.getString('ui_theme');
+    themePreference = AppThemePreference.values.firstWhere(
+      (value) => value.name == savedTheme,
+      orElse: () => AppThemePreference.system,
+    );
     notifyListeners();
   }
 
@@ -26,5 +34,10 @@ class AppSettings extends ChangeNotifier {
     await Prefs.setString('ui_show_desc', v ? '1' : '0');
     notifyListeners();
   }
-}
 
+  Future<void> setThemePreference(AppThemePreference value) async {
+    themePreference = value;
+    await Prefs.setString('ui_theme', value.name);
+    notifyListeners();
+  }
+}

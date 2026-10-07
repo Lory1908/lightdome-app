@@ -176,25 +176,22 @@ const char PAGE[] PROGMEM =
     R"HTML(<!doctype html>
 <html>
 <head>
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LightDome - Mono</title>
 <style>
- body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;margin:16px;max-width:980px}
- h1{margin:0 0 12px}
- .row{display:flex;gap:12px;flex-wrap:wrap}
- .card{border:1px solid #ddd;border-radius:10px;padding:12px;flex:1;min-width:280px}
- label{display:block;font-size:14px;margin:6px 0}
- input[type=range]{width:100%}
- textarea{width:100%;min-height:180px;font-family:ui-monospace,Consolas,monospace}
- button{padding:8px 14px;border-radius:8px;border:1px solid #444;background:#fff;cursor:pointer}
- .on{background:#1a73e8;color:#fff;border-color:#1a73e8}
- .mono{font-family:ui-monospace,Consolas,monospace}
- .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
- .muted{color:#666}
+:root{color-scheme:light;--bg:#f3f4f0;--surface:#fff;--surface2:#eef0eb;--text:#181b1a;--muted:#666d69;--line:#dce0d9;--accent:#755700;--accentBg:#fff0bd;--good:#17675f;--shadow:#17201b14}
+:root[data-theme=dark]{color-scheme:dark;--bg:#0a0d0d;--surface:#151919;--surface2:#202525;--text:#f2f4ef;--muted:#a7afaa;--line:#2b3230;--accent:#ffd66b;--accentBg:#332a0d;--good:#9bd7ce;--shadow:#0008}
+*{box-sizing:border-box}body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;margin:0;background:var(--bg);color:var(--text);min-height:100vh}main{max-width:1120px;margin:auto;padding:24px 18px 50px}
+header{display:flex;align-items:center;gap:12px;margin-bottom:22px}.brand{width:46px;height:46px;border-radius:15px;display:grid;place-items:center;background:var(--accentBg);color:var(--accent);font-size:23px}.headcopy{flex:1}h1{font-size:24px;letter-spacing:-.5px;margin:0}.eyebrow{color:var(--good);font-size:12px;font-weight:750;letter-spacing:.8px;text-transform:uppercase}.theme{width:auto;background:var(--surface);color:var(--text);border:1px solid var(--line)}
+.row{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}.card{grid-column:span 4;background:var(--surface);border:1px solid var(--line);border-radius:24px;padding:20px;box-shadow:0 14px 40px var(--shadow)}.card:first-child{grid-column:span 7}.card:nth-child(2){grid-column:span 5}.card:nth-child(3){grid-column:span 12}h3{margin:0 0 16px;font-size:17px;letter-spacing:-.2px}
+label{display:block;font-size:13px;color:var(--muted);margin:10px 0 7px}input,textarea{width:100%;color:var(--text);background:var(--surface2);border:1px solid var(--line);border-radius:14px;padding:12px;font:inherit}input[type=range]{padding:0;accent-color:var(--accent);border:0}input[type=checkbox]{width:auto;accent-color:var(--accent)}input[type=file]{padding:8px}input[type=file]::file-selector-button{border:0;border-radius:10px;background:var(--surface);color:var(--text);padding:8px 10px;margin-right:9px;font-weight:650}textarea{min-height:150px;font-family:ui-monospace,Consolas,monospace;resize:vertical}
+button{padding:10px 14px;border-radius:13px;border:1px solid var(--line);background:var(--surface2);color:var(--text);font:inherit;font-weight:650;cursor:pointer;margin:3px 2px}.on{background:var(--accent);color:var(--bg);border-color:var(--accent)}button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.mono{font-family:ui-monospace,Consolas,monospace}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.muted{color:var(--muted);font-size:13px;line-height:1.45}pre{background:var(--surface2);border-radius:14px;padding:12px;white-space:pre-wrap}
+@media(max-width:760px){main{padding:18px 12px 36px}.card,.card:first-child,.card:nth-child(2),.card:nth-child(3){grid-column:span 12}.grid{grid-template-columns:1fr}header{margin-bottom:16px}.theme{padding:9px 11px}}
 </style>
 </head>
 <body>
-<h1>LightDome - Mono</h1>
+<main><header><div class="brand">LD</div><div class="headcopy"><div class="eyebrow">Controllo locale</div><h1>LightDome</h1></div><button class="theme" onclick="toggleTheme()">Cambia tema</button></header>
 
 <div class="row">
   <div class="card">
@@ -216,7 +213,7 @@ const char PAGE[] PROGMEM =
   <div class="card">
     <h3>PROGRAM (file .ldy)</h3>
     <div class="grid">
-      <input id="fname" placeholder="nome programma (es. song1)" />
+      <input id="fname" placeholder="Nome programma" />
       <label>Loop <input id="loop" type="checkbox"></label>
     </div>
     <div class="muted">Carica un file .ldy: header LDY1 + campioni uint16 LE</div>
@@ -233,7 +230,7 @@ const char PAGE[] PROGMEM =
 
   <div class="card">
     <h3>Pattern RAM (test rapido)</h3>
-    <textarea id="pat" placeholder="Esempio:\n100,0\n500,1023\n300,400\n300,0"></textarea>
+    <textarea id="pat" placeholder="100,0&#10;500,1023&#10;300,400&#10;300,0"></textarea>
     <div style="margin-top:8px">
       <button class="on" onclick="uploadPattern()">Carica</button>
       <button onclick="play()">Play</button>
@@ -243,7 +240,7 @@ const char PAGE[] PROGMEM =
     <h3>Stato</h3>
     <div id="st" class="mono">...</div>
   </div>
-</div>
+</div></main>
 
 <script>
 const stDiv = document.getElementById('st');
@@ -255,6 +252,9 @@ const pat = document.getElementById('pat');
 const fname = document.getElementById('fname');
 const file = document.getElementById('file');
 const out  = document.getElementById('out');
+function applyTheme(v){document.documentElement.dataset.theme=v;localStorage.setItem('ld-theme',v)}
+function toggleTheme(){applyTheme(document.documentElement.dataset.theme==='dark'?'light':'dark')}
+applyTheme(localStorage.getItem('ld-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'));
 
 function setY(){ fetch(`/set?y=${y.value}`); }
 function setParams(){
@@ -302,30 +302,38 @@ setInterval(updateStatus, 1000); updateStatus();
 </body></html>)HTML";
 
 const char WIFI_PAGE[] PROGMEM = R"HTML(<!doctype html>
-<html lang="it"><head><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Configura LightDome</title>
 <style>
-body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:#f4f5f7;margin:0;color:#202124}
-main{max-width:520px;margin:32px auto;padding:16px}.card{background:#fff;border-radius:16px;padding:22px;box-shadow:0 6px 24px #0002}
-h1{margin:0 0 8px;font-size:26px}p{line-height:1.45}.muted{color:#5f6368;font-size:14px}
-label{display:block;margin:16px 0 6px;font-weight:600}input,select,button{box-sizing:border-box;width:100%;font:inherit;padding:12px;border-radius:10px;border:1px solid #b8bdc5}
-button{margin-top:14px;background:#3157d5;color:#fff;border:0;font-weight:700;cursor:pointer}button.secondary{background:#eef1fb;color:#2443a4}
-button:disabled{opacity:.55;cursor:wait}#msg{white-space:pre-wrap;margin-top:14px;padding:10px;border-radius:9px;background:#f1f3f4;min-height:20px}.ok{background:#e6f4ea!important;color:#137333}.err{background:#fce8e6!important;color:#b3261e}
-</style></head><body><main><div class="card">
-<h1>Configura LightDome</h1>
-<p>Collega la cupola al Wi-Fi di casa. La password resta memorizzata solo nella scheda.</p>
-<button id="scan" class="secondary" type="button">Cerca reti Wi-Fi</button>
-<label for="ssid">Rete Wi-Fi</label><input id="ssid" list="nets" maxlength="32" autocomplete="off" placeholder="Nome della rete"><datalist id="nets"></datalist>
-<label for="pass">Password</label><input id="pass" type="password" maxlength="63" autocomplete="current-password" placeholder="Lascia vuoto solo per reti aperte">
-<button id="save" type="button">Salva e collega</button>
-<div id="msg">Pronto.</div>
-<p class="muted">Dopo il salvataggio la scheda si riavvia. Ricollega questo dispositivo al Wi-Fi di casa e apri <b>http://lightdome.local</b>.</p>
+:root{color-scheme:light;--bg:#f3f4f0;--surface:#fff;--surface2:#eef0eb;--text:#181b1a;--muted:#676d69;--line:#dce0d9;--accent:#755700;--accentBg:#fff0bd;--good:#17675f;--danger:#a6372c;--shadow:#17201b18}
+:root[data-theme=dark]{color-scheme:dark;--bg:#0a0d0d;--surface:#151919;--surface2:#202525;--text:#f2f4ef;--muted:#a7afaa;--line:#2b3230;--accent:#ffd66b;--accentBg:#332a0d;--good:#9bd7ce;--danger:#ffb4a9;--shadow:#0008}
+*{box-sizing:border-box}body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:var(--bg);margin:0;color:var(--text);min-height:100vh}main{max-width:560px;margin:auto;padding:24px 14px 40px}
+header{display:flex;align-items:center;gap:12px;margin-bottom:18px}.brand{width:46px;height:46px;border-radius:15px;background:var(--accentBg);color:var(--accent);display:grid;place-items:center;font-size:13px;font-weight:800;letter-spacing:.5px}.headcopy{flex:1}.eyebrow{color:var(--good);font-size:11px;font-weight:800;letter-spacing:.9px;text-transform:uppercase}h1{font-size:23px;letter-spacing:-.5px;margin:2px 0 0}.theme{width:auto;padding:9px 11px;background:var(--surface);color:var(--text)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:26px;padding:22px;box-shadow:0 16px 45px var(--shadow)}h2{font-size:21px;letter-spacing:-.4px;margin:0 0 7px}p{line-height:1.5;margin:0}.muted{color:var(--muted);font-size:13px}.steps{display:flex;gap:7px;margin:18px 0 16px}.step{flex:1;background:var(--surface2);border-radius:12px;padding:9px 7px;text-align:center;font-size:11px;color:var(--muted)}.step.active{background:var(--accentBg);color:var(--accent);font-weight:750}
+label{display:block;margin:15px 0 7px;font-weight:650;font-size:13px}input,button{width:100%;font:inherit;padding:13px 14px;border-radius:14px;border:1px solid var(--line)}input{background:var(--surface2);color:var(--text)}button{background:var(--accent);color:var(--bg);border-color:var(--accent);font-weight:750;cursor:pointer}button.secondary{background:var(--surface2);color:var(--text);border-color:var(--line)}button:disabled{opacity:.55;cursor:wait}button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#nets{display:grid;gap:7px;margin-top:10px}.network{display:flex;align-items:center;gap:11px;text-align:left;background:var(--surface2);color:var(--text);border-color:var(--line);padding:12px}.network.selected{background:var(--accentBg);border-color:var(--accent)}.network-copy{flex:1;min-width:0}.network-name{display:block;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.network-meta{display:block;color:var(--muted);font-size:12px;margin-top:2px}.network-state{color:var(--muted);font-size:12px}
+#msg{white-space:pre-wrap;margin-top:14px;padding:12px 13px;border-radius:14px;background:var(--surface2);min-height:20px;color:var(--muted);font-size:13px}.ok{background:#d9efe8!important;color:#105c50!important}.err{background:#fae1de!important;color:#942a22!important}.actions{display:grid;grid-template-columns:1fr 1.4fr;gap:8px;margin-top:16px}.foot{margin-top:14px!important}
+@media(max-width:420px){main{padding:14px 10px 28px}.card{padding:18px;border-radius:22px}.actions{grid-template-columns:1fr}.theme{font-size:12px}}
+</style></head><body><main>
+<header><div class="brand">LD</div><div class="headcopy"><div class="eyebrow">Configurazione locale</div><h1>LightDome</h1></div><button class="theme" onclick="toggleTheme()">Tema</button></header>
+<div class="card"><h2>Collega la cupola</h2><p class="muted">Scegli la rete di casa. La password resta soltanto nella memoria della scheda.</p>
+<div class="steps"><div class="step active">1 · Rete</div><div class="step">2 · Password</div><div class="step">3 · Pronta</div></div>
+<button id="scan" class="secondary" type="button">Aggiorna elenco reti</button><div id="nets"></div>
+<label for="ssid">Nome rete Wi-Fi</label><input id="ssid" maxlength="32" autocomplete="off" placeholder="SSID della rete">
+<label for="pass">Password</label><input id="pass" type="password" maxlength="63" autocomplete="current-password" placeholder="Vuota soltanto per reti aperte">
+<div class="actions"><button id="show" class="secondary" type="button">Mostra password</button><button id="save" type="button">Salva e collega</button></div>
+<div id="msg">Pronto per cercare le reti.</div><p class="muted foot">Dopo il riavvio torna sulla rete di casa e apri <b>lightdome.local</b>.</p>
 </div></main><script>
-const $=id=>document.getElementById(id),msg=$('msg');
+const $=id=>document.getElementById(id),msg=$('msg');let selected='';
+function applyTheme(v){document.documentElement.dataset.theme=v;localStorage.setItem('ld-theme',v)}
+function toggleTheme(){applyTheme(document.documentElement.dataset.theme==='dark'?'light':'dark')}
+applyTheme(localStorage.getItem('ld-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'));
 function show(t,c=''){msg.textContent=t;msg.className=c}
-async function scan(){const b=$('scan');b.disabled=true;show('Ricerca reti in corso…');try{const r=await fetch('/wifi/scan');const j=await r.json();if(!r.ok)throw Error(j.error||'Ricerca non riuscita');const d=$('nets');d.replaceChildren();j.networks.forEach(n=>{const o=document.createElement('option');o.value=n.ssid;o.label=`${n.ssid} (${n.rssi} dBm${n.secure?', protetta':''})`;d.appendChild(o)});show(`${j.networks.length} reti trovate.`,'ok')}catch(e){show(e.message,'err')}finally{b.disabled=false}}
-async function save(){const ssid=$('ssid').value.trim(),password=$('pass').value,b=$('save');if(!ssid){show('Scegli o inserisci una rete.','err');return}b.disabled=true;show('Salvataggio…');try{const r=await fetch('/wifi/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ssid,password})});const j=await r.json();if(!r.ok)throw Error(j.error||'Configurazione non riuscita');$('pass').value='';show('Configurazione salvata. LightDome si riavvia e prova a collegarsi al Wi-Fi.','ok')}catch(e){show(e.message,'err');b.disabled=false}}
-$('scan').onclick=scan;$('save').onclick=save;scan();
+function quality(r){return r>=-55?'Segnale ottimo':r>=-68?'Segnale buono':'Segnale debole'}
+function choose(n,b){selected=n.ssid;$('ssid').value=n.ssid;document.querySelectorAll('.network').forEach(x=>x.classList.remove('selected'));b.classList.add('selected')}
+async function scan(){const b=$('scan');b.disabled=true;show('Ricerca reti in corso…');try{const r=await fetch('/wifi/scan'),j=await r.json();if(!r.ok)throw Error(j.error||'Ricerca non riuscita');const d=$('nets');d.replaceChildren();j.networks.forEach(n=>{const b=document.createElement('button');b.type='button';b.className='network';const c=document.createElement('span');c.className='network-copy';const name=document.createElement('span');name.className='network-name';name.textContent=n.ssid;const meta=document.createElement('span');meta.className='network-meta';meta.textContent=`${quality(n.rssi)} · ${n.rssi} dBm`;const state=document.createElement('span');state.className='network-state';state.textContent=n.secure?'Protetta':'Aperta';c.append(name,meta);b.append(c,state);b.onclick=()=>choose(n,b);d.appendChild(b)});show(`${j.networks.length} reti trovate.`,'ok')}catch(e){show(e.message,'err')}finally{b.disabled=false}}
+async function save(){const ssid=$('ssid').value.trim(),password=$('pass').value,b=$('save');if(!ssid){show('Scegli o inserisci una rete.','err');return}b.disabled=true;show('Salvataggio e riavvio…');try{const r=await fetch('/wifi/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ssid,password})}),j=await r.json();if(!r.ok)throw Error(j.error||'Configurazione non riuscita');$('pass').value='';show('Configurazione salvata. LightDome si sta collegando alla rete.','ok')}catch(e){show(e.message,'err');b.disabled=false}}
+$('scan').onclick=scan;$('save').onclick=save;$('show').onclick=()=>{const p=$('pass'),showing=p.type==='text';p.type=showing?'password':'text';$('show').textContent=showing?'Mostra password':'Nascondi password'};scan();
 </script></body></html>)HTML";
 
 // -------------------- HANDLERS BASE ---------------------------------------

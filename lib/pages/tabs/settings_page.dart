@@ -20,6 +20,7 @@ class _SettingsPageState extends State<SettingsPage> {
   final _wifiSsidCtrl = TextEditingController();
   final _wifiPasswordCtrl = TextEditingController();
   List<WifiNetwork> _wifiNetworks = const [];
+  String? _selectedWifiSsid;
   bool _wifiBusy = false;
   bool _showWifiPassword = false;
   String _wifiMessage =
@@ -160,27 +161,15 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             if (_wifiNetworks.isNotEmpty) ...[
               const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                decoration: const InputDecoration(labelText: 'Reti trovate'),
-                hint: const Text('Scegli una rete'),
-                items: _wifiNetworks
-                    .map(
-                      (network) => DropdownMenuItem(
-                        value: network.ssid,
-                        child: Text(
-                          '${network.ssid}  ${network.rssi} dBm'
-                          '${network.secure ? '  🔒' : ''}',
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    )
-                    .toList(growable: false),
-                onChanged: _wifiBusy
-                    ? null
-                    : (ssid) {
-                        if (ssid != null) _wifiSsidCtrl.text = ssid;
-                      },
+              Text(
+                'Reti trovate',
+                style: Theme.of(context).textTheme.labelLarge,
               ),
+              const SizedBox(height: 8),
+              for (final network in _wifiNetworks.take(8)) ...[
+                _wifiNetworkTile(network),
+                const SizedBox(height: 7),
+              ],
             ],
             const SizedBox(height: 12),
             TextField(
@@ -234,6 +223,78 @@ class _SettingsPageState extends State<SettingsPage> {
               style: TextStyle(fontSize: 12),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _wifiNetworkTile(WifiNetwork network) {
+    final scheme = Theme.of(context).colorScheme;
+    final selected = _selectedWifiSsid == network.ssid;
+    final quality = network.rssi >= -55
+        ? 'Segnale ottimo'
+        : network.rssi >= -68
+        ? 'Segnale buono'
+        : 'Segnale debole';
+    return Material(
+      color: selected
+          ? scheme.primary.withValues(alpha: 0.12)
+          : scheme.surfaceContainerHigh.withValues(alpha: 0.66),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: _wifiBusy
+            ? null
+            : () {
+                setState(() => _selectedWifiSsid = network.ssid);
+                _wifiSsidCtrl.text = network.ssid;
+              },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              Icon(
+                network.rssi >= -55
+                    ? Icons.signal_wifi_4_bar_rounded
+                    : network.rssi >= -68
+                    ? Icons.network_wifi_3_bar_rounded
+                    : Icons.network_wifi_1_bar_rounded,
+                color: selected ? scheme.primary : scheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      network.ssid,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '$quality • ${network.rssi} dBm',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                network.secure
+                    ? Icons.lock_outline_rounded
+                    : Icons.lock_open_rounded,
+                size: 18,
+                color: scheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                selected ? Icons.check_circle_rounded : Icons.circle_outlined,
+                color: selected ? scheme.primary : scheme.outline,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -407,6 +468,32 @@ class _SettingsPageState extends State<SettingsPage> {
             const Text(
               'Preferenze',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text('Aspetto', style: Theme.of(context).textTheme.labelLarge),
+            const SizedBox(height: 8),
+            SegmentedButton<AppThemePreference>(
+              segments: const [
+                ButtonSegment(
+                  value: AppThemePreference.system,
+                  icon: Icon(Icons.brightness_auto_rounded),
+                  label: Text('Sistema'),
+                ),
+                ButtonSegment(
+                  value: AppThemePreference.light,
+                  icon: Icon(Icons.light_mode_outlined),
+                  label: Text('Chiaro'),
+                ),
+                ButtonSegment(
+                  value: AppThemePreference.dark,
+                  icon: Icon(Icons.dark_mode_outlined),
+                  label: Text('Scuro'),
+                ),
+              ],
+              selected: {app.themePreference},
+              onSelectionChanged: (selection) {
+                app.setThemePreference(selection.first);
+              },
             ),
             const SizedBox(height: 8),
             SwitchListTile(

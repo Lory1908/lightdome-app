@@ -12,62 +12,81 @@ class DashboardPage extends StatelessWidget {
     return AnimatedBuilder(
       animation: ctrl,
       builder: (context, _) {
-        final st = ctrl.state;
-        final pattern = ctrl.pattern;
-        final items = <Widget>[
-          _statCard(context, 'Connessione', ctrl.isConnected ? 'Pronta' : 'Non connesso', icon: ctrl.isConnected ? Icons.check_circle : Icons.link_off),
-          _statCard(context, 'Stato lampada', st.on ? 'Accesa' : 'Spenta', icon: st.on ? Icons.light_mode : Icons.dark_mode),
-          _statCard(context, 'Modalità', _modeLabel(st.mode), icon: Icons.info_outline),
-          _statCard(context, 'Livello uscita', '${(st.y * 100).toStringAsFixed(0)}%', icon: Icons.speed),
-          _statCard(context, 'Brightness master', '${(st.brightness * 100).toStringAsFixed(0)}%', icon: Icons.brightness_6),
-          _statCard(context, 'Gamma', st.gamma.toStringAsFixed(1), icon: Icons.timeline),
-          if (pattern.type != PatternType.none)
-            _statCard(context, 'Pattern locale', _patternSummary(pattern), icon: Icons.tune),
-          if (st.programName != null && st.programName!.isNotEmpty)
-            _statCard(context, 'Programma attivo', st.programName!, icon: Icons.playlist_play),
-          if (st.sr > 0)
-            _statCard(context, 'Campionamento', '${st.sr} Hz', icon: Icons.graphic_eq),
-          if (st.loop)
-            _statCard(context, 'Loop programmi', 'Attivo', icon: Icons.loop),
-          if (st.fwVersion != null) _statCard(context, 'FW', st.fwVersion!, icon: Icons.memory),
-          if (st.uptime != null) _statCard(context, 'Uptime', '${st.uptime} s', icon: Icons.timer_outlined),
+        final state = ctrl.state;
+        final metrics = <Widget>[
+          _metricCard(
+            context,
+            'Modalità',
+            _modeLabel(state.mode),
+            Icons.bolt_rounded,
+          ),
+          _metricCard(
+            context,
+            'Master',
+            '${(state.brightness * 100).round()}%',
+            Icons.brightness_6_rounded,
+          ),
+          _metricCard(
+            context,
+            'Gamma',
+            state.gamma.toStringAsFixed(1),
+            Icons.show_chart_rounded,
+          ),
+          if (ctrl.pattern.type != PatternType.none)
+            _metricCard(
+              context,
+              'Pattern',
+              _patternSummary(ctrl.pattern),
+              Icons.graphic_eq_rounded,
+            ),
+          if (state.programName?.isNotEmpty == true)
+            _metricCard(
+              context,
+              'Programma',
+              state.programName!,
+              Icons.queue_music_rounded,
+            ),
+          if (state.sr > 0)
+            _metricCard(
+              context,
+              'Campionamento',
+              '${state.sr} Hz',
+              Icons.speed_rounded,
+            ),
         ];
 
         return RefreshIndicator(
-          onRefresh: () async => ctrl.refreshOnce(),
+          onRefresh: ctrl.refreshOnce,
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final w = constraints.maxWidth;
-              final cols = w >= 1100 ? 3 : (w >= 700 ? 2 : 1);
-              final cardW = (w - (16 * (cols + 1))) / cols; // padding + gaps
+              final columns = constraints.maxWidth >= 820 ? 3 : 2;
+              const gap = 12.0;
+              final available = constraints.maxWidth - 32;
+              final cardWidth = (available - gap * (columns - 1)) / columns;
               return ListView(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
                 children: [
-                  Wrap(
-                    spacing: 16,
-                    runSpacing: 16,
-                    children: [for (final it in items) SizedBox(width: cardW, child: it)],
+                  Text(
+                    'La tua luce',
+                    style: Theme.of(context).textTheme.headlineMedium,
                   ),
-                  const SizedBox(height: 16),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Wrap(
-                        spacing: 8,
-                        children: [
-                          ElevatedButton.icon(
-                            onPressed: ctrl.refreshOnce,
-                            icon: const Icon(Icons.refresh),
-                            label: const Text('Aggiorna'),
-                          ),
-                          FilledButton.tonalIcon(
-                            onPressed: ctrl.off,
-                            icon: const Icon(Icons.power_settings_new),
-                            label: const Text('Spegni'),
-                          ),
-                        ],
-                      ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Controllo essenziale, risposta immediata.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
+                  ),
+                  const SizedBox(height: 18),
+                  _heroCard(context, ctrl),
+                  const SizedBox(height: 14),
+                  Wrap(
+                    spacing: gap,
+                    runSpacing: gap,
+                    children: [
+                      for (final metric in metrics)
+                        SizedBox(width: cardWidth, child: metric),
+                    ],
                   ),
                 ],
               );
@@ -78,25 +97,154 @@ class DashboardPage extends StatelessWidget {
     );
   }
 
-  Widget _statCard(BuildContext context, String k, String v, {IconData? icon}) {
-    final theme = Theme.of(context);
+  Widget _heroCard(BuildContext context, DeviceController ctrl) {
+    final scheme = Theme.of(context).colorScheme;
+    final state = ctrl.state;
+    final level = (state.y * 100).clamp(0, 100).round();
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(22),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 520;
+            final lamp = Container(
+              width: compact ? 118 : 152,
+              height: compact ? 118 : 152,
+              decoration: BoxDecoration(
+                color: state.on
+                    ? scheme.primary.withValues(alpha: 0.16 + state.y * 0.18)
+                    : scheme.surfaceContainerHigh,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: state.on ? scheme.primary : scheme.outlineVariant,
+                  width: 1.5,
+                ),
+                boxShadow: state.on
+                    ? [
+                        BoxShadow(
+                          color: scheme.primary.withValues(
+                            alpha: 0.2 + state.y * 0.2,
+                          ),
+                          blurRadius: 36,
+                          spreadRadius: 2,
+                        ),
+                      ]
+                    : const [],
+              ),
+              child: Icon(
+                state.on ? Icons.light_mode_rounded : Icons.light_mode_outlined,
+                size: compact ? 54 : 68,
+                color: state.on ? scheme.primary : scheme.onSurfaceVariant,
+              ),
+            );
+            final details = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      ctrl.isConnected
+                          ? Icons.wifi_rounded
+                          : Icons.wifi_off_rounded,
+                      size: 17,
+                      color: ctrl.isConnected ? scheme.secondary : scheme.error,
+                    ),
+                    const SizedBox(width: 7),
+                    Text(
+                      ctrl.isConnected ? 'CONNESSA' : 'NON CONNESSA',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: ctrl.isConnected
+                            ? scheme.secondary
+                            : scheme.error,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  state.on ? 'Cupola accesa' : 'Cupola spenta',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '$level%',
+                  style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                    fontWeight: FontWeight.w300,
+                    color: state.on ? scheme.primary : scheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    FilledButton.icon(
+                      onPressed: ctrl.isConnected ? ctrl.off : null,
+                      icon: const Icon(Icons.power_settings_new_rounded),
+                      label: const Text('Spegni'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: ctrl.refreshOnce,
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: const Text('Aggiorna'),
+                    ),
+                  ],
+                ),
+              ],
+            );
+            if (compact) {
+              return Column(
+                children: [
+                  lamp,
+                  const SizedBox(height: 22),
+                  Align(alignment: Alignment.centerLeft, child: details),
+                ],
+              );
+            }
+            return Row(
+              children: [
+                lamp,
+                const SizedBox(width: 28),
+                Expanded(child: details),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _metricCard(
+    BuildContext context,
+    String label,
+    String value,
+    IconData icon,
+  ) {
+    final scheme = Theme.of(context).colorScheme;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (icon != null) Icon(icon, color: theme.colorScheme.primary),
-            if (icon != null) const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(k, style: theme.textTheme.labelLarge?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-                  const SizedBox(height: 4),
-                  Text(v, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-                ],
-              ),
+            Icon(icon, color: scheme.secondary, size: 21),
+            const SizedBox(height: 18),
+            Text(
+              label,
+              style: Theme.of(
+                context,
+              ).textTheme.labelMedium?.copyWith(color: scheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleMedium,
             ),
           ],
         ),
@@ -108,12 +256,12 @@ class DashboardPage extends StatelessWidget {
     switch (mode) {
       case 'live':
       case 'live_or_idle':
-        return 'Controllo in tempo reale';
+        return 'Live';
       case 'program':
-        return 'Programma (.ldy)';
+        return 'Programma';
       case 'program_ram':
       case 'ram':
-        return 'Pattern di prova (RAM)';
+        return 'Pattern RAM';
       case 'idle':
         return 'In attesa';
       default:
@@ -121,19 +269,18 @@ class DashboardPage extends StatelessWidget {
     }
   }
 
-  String _patternSummary(PatternConfig cfg) {
-    switch (cfg.type) {
+  String _patternSummary(PatternConfig config) {
+    switch (config.type) {
       case PatternType.sine:
-        return 'Sine ${cfg.freqHz.toStringAsFixed(1)} Hz';
+        return 'Sine ${config.freqHz.toStringAsFixed(1)} Hz';
       case PatternType.pulse:
-        final duty = ((cfg.duty ?? 0.5) * 100).round();
-        return 'Pulse ${cfg.freqHz.toStringAsFixed(1)} Hz • duty $duty%';
+        return 'Pulse ${config.freqHz.toStringAsFixed(1)} Hz';
       case PatternType.micReactive:
-        return 'Mic reattivo • gain ${cfg.amplitude.toStringAsFixed(1)}x';
+        return 'Mic reattivo';
       case PatternType.songWaveSpotify:
-        return 'Spotify (beta)';
+        return 'Spotify';
       case PatternType.songWaveOpen:
-        return 'Provider aperto';
+        return 'File locale';
       case PatternType.none:
         return 'Nessuno';
     }
