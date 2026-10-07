@@ -41,6 +41,7 @@
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include <DNSServer.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266mDNS.h>
@@ -48,11 +49,15 @@
 #include <math.h>
 
 // ---- CONFIG RETE ---------------------------------------------------------
-// Credenziali vuote intenzionali: questa baseline passa direttamente all’AP.
-const char *STA_SSID = "";
-const char *STA_PASS = "";
+// Le credenziali vengono configurate localmente dall'app o dal captive portal
+// e salvate in LittleFS. Non sono mai compilate nel firmware né restituite via
+// API.
 const char *AP_SSID = "LightDome-Setup";
 const char *MDNS_NAME = "lightdome";
+const char *WIFI_CONFIG_FILE = "/wifi.json";
+const char *WIFI_CONFIG_TEMP = "/wifi.json.tmp";
+const char *WIFI_CONFIG_BACKUP = "/wifi.json.bak";
+const uint32_t WIFI_CONNECT_TIMEOUT_MS = 15000;
 
 // ---- PIN USCITA (MONO CANALE) -------------------------------------------
 const int PIN_Y = D5; // D5/GPIO14
@@ -102,7 +107,13 @@ struct __attribute__((packed)) LdyHeader {
 
 // ---- WEB -----------------------------------------------------------------
 ESP8266WebServer server(80);
+DNSServer dnsServer;
 bool littleFsMounted = false;
+bool apActive = false;
+bool mdnsActive = false;
+bool wifiConfigured = false;
+String configuredSsid;
+uint32_t restartAtMs = 0;
 
 // ---- UTILS ----------------------------------------------------------------
 static inline uint16_t clamp16(int v, int lo, int hi) {
@@ -290,10 +301,37 @@ setInterval(updateStatus, 1000); updateStatus();
 </script>
 </body></html>)HTML";
 
+const char WIFI_PAGE[] PROGMEM = R"HTML(<!doctype html>
+<html lang="it"><head><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Configura LightDome</title>
+<style>
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:#f4f5f7;margin:0;color:#202124}
+main{max-width:520px;margin:32px auto;padding:16px}.card{background:#fff;border-radius:16px;padding:22px;box-shadow:0 6px 24px #0002}
+h1{margin:0 0 8px;font-size:26px}p{line-height:1.45}.muted{color:#5f6368;font-size:14px}
+label{display:block;margin:16px 0 6px;font-weight:600}input,select,button{box-sizing:border-box;width:100%;font:inherit;padding:12px;border-radius:10px;border:1px solid #b8bdc5}
+button{margin-top:14px;background:#3157d5;color:#fff;border:0;font-weight:700;cursor:pointer}button.secondary{background:#eef1fb;color:#2443a4}
+button:disabled{opacity:.55;cursor:wait}#msg{white-space:pre-wrap;margin-top:14px;padding:10px;border-radius:9px;background:#f1f3f4;min-height:20px}.ok{background:#e6f4ea!important;color:#137333}.err{background:#fce8e6!important;color:#b3261e}
+</style></head><body><main><div class="card">
+<h1>Configura LightDome</h1>
+<p>Collega la cupola al Wi-Fi di casa. La password resta memorizzata solo nella scheda.</p>
+<button id="scan" class="secondary" type="button">Cerca reti Wi-Fi</button>
+<label for="ssid">Rete Wi-Fi</label><input id="ssid" list="nets" maxlength="32" autocomplete="off" placeholder="Nome della rete"><datalist id="nets"></datalist>
+<label for="pass">Password</label><input id="pass" type="password" maxlength="63" autocomplete="current-password" placeholder="Lascia vuoto solo per reti aperte">
+<button id="save" type="button">Salva e collega</button>
+<div id="msg">Pronto.</div>
+<p class="muted">Dopo il salvataggio la scheda si riavvia. Ricollega questo dispositivo al Wi-Fi di casa e apri <b>http://lightdome.local</b>.</p>
+</div></main><script>
+const $=id=>document.getElementById(id),msg=$('msg');
+function show(t,c=''){msg.textContent=t;msg.className=c}
+async function scan(){const b=$('scan');b.disabled=true;show('Ricerca reti in corso…');try{const r=await fetch('/wifi/scan');const j=await r.json();if(!r.ok)throw Error(j.error||'Ricerca non riuscita');const d=$('nets');d.replaceChildren();j.networks.forEach(n=>{const o=document.createElement('option');o.value=n.ssid;o.label=`${n.ssid} (${n.rssi} dBm${n.secure?', protetta':''})`;d.appendChild(o)});show(`${j.networks.length} reti trovate.`,'ok')}catch(e){show(e.message,'err')}finally{b.disabled=false}}
+async function save(){const ssid=$('ssid').value.trim(),password=$('pass').value,b=$('save');if(!ssid){show('Scegli o inserisci una rete.','err');return}b.disabled=true;show('Salvataggio…');try{const r=await fetch('/wifi/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ssid,password})});const j=await r.json();if(!r.ok)throw Error(j.error||'Configurazione non riuscita');$('pass').value='';show('Configurazione salvata. LightDome si riavvia e prova a collegarsi al Wi-Fi.','ok')}catch(e){show(e.message,'err');b.disabled=false}}
+$('scan').onclick=scan;$('save').onclick=save;scan();
+</script></body></html>)HTML";
+
 // -------------------- HANDLERS BASE ---------------------------------------
 void handleRoot() {
   sendCORS();
-  server.send(200, "text/html", FPSTR(PAGE));
+  server.send(200, "text/html", apActive ? FPSTR(WIFI_PAGE) : FPSTR(PAGE));
 }
 
 void handleStatus() {
@@ -870,19 +908,230 @@ void handleProgDelete() {
     server.send(404, "text/plain", "Non trovato");
 }
 
-// -------------------- Wi-Fi / Setup --------------------------------------
+// -------------------- Wi-Fi / captive portal -----------------------------
+bool validWifiCredentials(const String &ssid, const String &password) {
+  if (ssid.length() == 0 || ssid.length() > 32)
+    return false;
+  return password.length() == 0 ||
+         (password.length() >= 8 && password.length() <= 63);
+}
+
+bool loadWifiCredentials(String &ssid, String &password) {
+  wifiConfigured = false;
+  configuredSsid = "";
+  if (!littleFsMounted || !LittleFS.exists(WIFI_CONFIG_FILE))
+    return false;
+  File f = LittleFS.open(WIFI_CONFIG_FILE, "r");
+  if (!f)
+    return false;
+  JsonDocument doc;
+  DeserializationError err = deserializeJson(doc, f);
+  f.close();
+  if (err || !doc["ssid"].is<const char *>() ||
+      !doc["password"].is<const char *>())
+    return false;
+  ssid = String(doc["ssid"].as<const char *>());
+  password = String(doc["password"].as<const char *>());
+  if (!validWifiCredentials(ssid, password))
+    return false;
+  wifiConfigured = true;
+  configuredSsid = ssid;
+  return true;
+}
+
+bool saveWifiCredentials(const String &ssid, const String &password) {
+  if (!littleFsMounted || !validWifiCredentials(ssid, password))
+    return false;
+  LittleFS.remove(WIFI_CONFIG_TEMP);
+  File f = LittleFS.open(WIFI_CONFIG_TEMP, "w");
+  if (!f)
+    return false;
+  JsonDocument doc;
+  doc["ssid"] = ssid;
+  doc["password"] = password;
+  bool wrote = serializeJson(doc, f) > 0;
+  f.close();
+  if (!wrote) {
+    LittleFS.remove(WIFI_CONFIG_TEMP);
+    return false;
+  }
+
+  LittleFS.remove(WIFI_CONFIG_BACKUP);
+  bool hadExisting = LittleFS.exists(WIFI_CONFIG_FILE);
+  if (hadExisting &&
+      !LittleFS.rename(WIFI_CONFIG_FILE, WIFI_CONFIG_BACKUP)) {
+    LittleFS.remove(WIFI_CONFIG_TEMP);
+    return false;
+  }
+  if (!LittleFS.rename(WIFI_CONFIG_TEMP, WIFI_CONFIG_FILE)) {
+    if (hadExisting)
+      LittleFS.rename(WIFI_CONFIG_BACKUP, WIFI_CONFIG_FILE);
+    LittleFS.remove(WIFI_CONFIG_TEMP);
+    return false;
+  }
+  LittleFS.remove(WIFI_CONFIG_BACKUP);
+  wifiConfigured = true;
+  configuredSsid = ssid;
+  return true;
+}
+
+void startSetupPortal() {
+  WiFi.mode(WIFI_AP_STA);
+  WiFi.softAP(AP_SSID);
+  apActive = true;
+  dnsServer.start(53, "*", WiFi.softAPIP());
+  Serial.println("Portale Wi-Fi attivo: collegarsi a LightDome-Setup");
+  Serial.println("Portale: http://" + WiFi.softAPIP().toString() + "/wifi");
+}
+
+bool requestComesFromSetupNetwork() {
+  if (!apActive)
+    return false;
+  IPAddress remote = server.client().remoteIP();
+  IPAddress local = WiFi.softAPIP();
+  return remote[0] == local[0] && remote[1] == local[1] &&
+         remote[2] == local[2];
+}
+
+void sendJsonDocument(int status, JsonDocument &doc) {
+  sendCORS();
+  String out;
+  serializeJson(doc, out);
+  server.send(status, "application/json", out);
+}
+
+void sendWifiError(int status, const String &message) {
+  JsonDocument doc;
+  doc["error"] = message;
+  sendJsonDocument(status, doc);
+}
+
+void handleWifiPage() {
+  sendCORS();
+  server.send(200, "text/html", FPSTR(WIFI_PAGE));
+}
+
+void handleWifiStatus() {
+  JsonDocument doc;
+  doc["configured"] = wifiConfigured;
+  doc["connected"] = WiFi.status() == WL_CONNECTED;
+  doc["portal"] = apActive;
+  doc["mode"] = WiFi.status() == WL_CONNECTED ? "station" : "setup";
+  doc["ssid"] = WiFi.status() == WL_CONNECTED ? WiFi.SSID() : configuredSsid;
+  doc["ip"] = (WiFi.status() == WL_CONNECTED ? WiFi.localIP()
+                                                 : WiFi.softAPIP())
+                  .toString();
+  doc["hostname"] = String(MDNS_NAME) + ".local";
+  sendJsonDocument(200, doc);
+}
+
+void handleWifiScan() {
+  if (!requestComesFromSetupNetwork()) {
+    sendWifiError(403, "Scansione disponibile solo da LightDome-Setup");
+    return;
+  }
+  int count = WiFi.scanNetworks(false, true);
+  if (count < 0) {
+    sendWifiError(503, "Scansione Wi-Fi non riuscita");
+    return;
+  }
+  JsonDocument doc;
+  JsonArray networks = doc["networks"].to<JsonArray>();
+  int included = 0;
+  for (int i = 0; i < count && included < 20; ++i) {
+    String ssid = WiFi.SSID(i);
+    if (ssid.length() == 0)
+      continue;
+    bool duplicate = false;
+    for (JsonObject network : networks) {
+      if (ssid == String(network["ssid"].as<const char *>())) {
+        duplicate = true;
+        break;
+      }
+    }
+    if (duplicate)
+      continue;
+    JsonObject network = networks.add<JsonObject>();
+    network["ssid"] = ssid;
+    network["rssi"] = WiFi.RSSI(i);
+    network["secure"] = WiFi.encryptionType(i) != ENC_TYPE_NONE;
+    included++;
+  }
+  WiFi.scanDelete();
+  sendJsonDocument(200, doc);
+}
+
+void handleWifiConfig() {
+  if (!requestComesFromSetupNetwork()) {
+    sendWifiError(403, "Configurazione disponibile solo da LightDome-Setup");
+    return;
+  }
+  if (!littleFsMounted) {
+    sendWifiError(503, "Memoria locale non disponibile");
+    return;
+  }
+
+  String ssid;
+  String password;
+  if (server.hasArg("plain") && server.arg("plain").length() > 0) {
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, server.arg("plain"));
+    if (err || !doc["ssid"].is<const char *>() ||
+        !doc["password"].is<const char *>()) {
+      sendWifiError(400, "Dati Wi-Fi non validi");
+      return;
+    }
+    ssid = String(doc["ssid"].as<const char *>());
+    password = String(doc["password"].as<const char *>());
+  } else {
+    ssid = server.arg("ssid");
+    password = server.arg("password");
+  }
+  ssid.trim();
+  if (!validWifiCredentials(ssid, password)) {
+    sendWifiError(400,
+                  "SSID richiesto; password vuota oppure da 8 a 63 caratteri");
+    return;
+  }
+  if (!saveWifiCredentials(ssid, password)) {
+    sendWifiError(500, "Impossibile salvare la configurazione");
+    return;
+  }
+
+  JsonDocument response;
+  response["accepted"] = true;
+  response["restarting"] = true;
+  sendJsonDocument(202, response);
+  restartAtMs = millis() + 1500;
+}
+
+void redirectToWifiPortal() {
+  String location = "http://" + WiFi.softAPIP().toString() + "/wifi";
+  server.sendHeader("Location", location, true);
+  server.send(302, "text/plain", "Configura LightDome su " + location);
+}
+
 void setupWiFi() {
-  if (STA_SSID[0] != '\0') {
+  WiFi.persistent(false);
+  WiFi.setAutoReconnect(true);
+  String ssid;
+  String password;
+  if (loadWifiCredentials(ssid, password)) {
+    Serial.println("Tentativo di connessione al Wi-Fi configurato...");
     WiFi.mode(WIFI_STA);
-    WiFi.begin(STA_SSID, STA_PASS);
-    uint32_t t0 = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - t0 < 10000)
+    WiFi.begin(ssid.c_str(), password.c_str());
+    uint32_t startedAt = millis();
+    while (WiFi.status() != WL_CONNECTED &&
+           millis() - startedAt < WIFI_CONNECT_TIMEOUT_MS) {
       delay(250);
+      yield();
+    }
   }
-  if (STA_SSID[0] == '\0' || WiFi.status() != WL_CONNECTED) {
-    WiFi.mode(WIFI_AP);
-    WiFi.softAP(AP_SSID);
-  }
+  password = "";
+  if (WiFi.status() != WL_CONNECTED)
+    startSetupPortal();
+  else
+    Serial.println("Wi-Fi collegato. IP: " + WiFi.localIP().toString());
 }
 
 void setup() {
@@ -895,14 +1144,27 @@ void setup() {
   Serial.begin(115200);
   littleFsMounted = LittleFS.begin();
   setupWiFi();
-  if (MDNS.begin(MDNS_NAME)) {
+  if (WiFi.status() == WL_CONNECTED && MDNS.begin(MDNS_NAME)) {
     MDNS.addService("http", "tcp", 80);
+    mdnsActive = true;
   }
   server.onNotFound([]() {
-    sendCORS();
-    server.send(404, "text/plain", "Not found");
+    if (apActive)
+      redirectToWifiPortal();
+    else {
+      sendCORS();
+      server.send(404, "text/plain", "Not found");
+    }
   });
   server.on("/", HTTP_GET, handleRoot);
+  server.on("/wifi", HTTP_GET, handleWifiPage);
+  server.on("/wifi/status", HTTP_GET, handleWifiStatus);
+  server.on("/wifi/scan", HTTP_GET, handleWifiScan);
+  server.on("/wifi/config", HTTP_POST, handleWifiConfig);
+  server.on("/generate_204", HTTP_GET, redirectToWifiPortal);
+  server.on("/hotspot-detect.html", HTTP_GET, redirectToWifiPortal);
+  server.on("/ncsi.txt", HTTP_GET, redirectToWifiPortal);
+  server.on("/connecttest.txt", HTTP_GET, redirectToWifiPortal);
   server.on("/status", HTTP_GET, handleStatus);
   server.on("/set", HTTP_GET, handleSet);
   server.on("/params", HTTP_GET, handleParams);
@@ -918,6 +1180,10 @@ void setup() {
   server.on("/prog/list", HTTP_GET, handleProgList);
   server.on("/prog/delete", HTTP_DELETE, handleProgDelete);
   server.on("/", HTTP_OPTIONS, handleOptions);
+  server.on("/wifi", HTTP_OPTIONS, handleOptions);
+  server.on("/wifi/status", HTTP_OPTIONS, handleOptions);
+  server.on("/wifi/scan", HTTP_OPTIONS, handleOptions);
+  server.on("/wifi/config", HTTP_OPTIONS, handleOptions);
   server.on("/status", HTTP_OPTIONS, handleOptions);
   server.on("/set", HTTP_OPTIONS, handleOptions);
   server.on("/params", HTTP_OPTIONS, handleOptions);
@@ -957,7 +1223,14 @@ void setup() {
 // -------------------- LOOP ------------------------------------------------
 void loop() {
   server.handleClient();
-  MDNS.update();
+  if (apActive)
+    dnsServer.processNextRequest();
+  if (mdnsActive)
+    MDNS.update();
+  if (restartAtMs != 0 && (int32_t)(millis() - restartAtMs) >= 0) {
+    delay(50);
+    ESP.restart();
+  }
   if (programPlaying) {
     if (sampleRateHz == 0)
       sampleRateHz = 100;

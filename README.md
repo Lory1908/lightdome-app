@@ -20,9 +20,18 @@ Per una panoramica completa di architettura, moduli, API e scelte progettuali ve
 
 ## Onboarding
 
-1. Apri l’app → tab `Impostazioni`.
-2. Inserisci IP o mDNS del dispositivo (es. `http://192.168.4.1` in modalità AP o `http://lightdome.local`).
-3. Premi `Connetti`.
+1. Alla prima accensione collegati dal telefono o PC alla rete
+   `LightDome-Setup`.
+2. Nell’app apri `Impostazioni` → `Configura il Wi-Fi della cupola`, cerca la
+   rete di casa, inserisci la password e premi `Salva e collega`.
+3. In alternativa, da PC apri `http://192.168.4.1`: il portale offre la stessa
+   configurazione senza richiedere l’app.
+4. Dopo il riavvio ricollegati al Wi-Fi di casa e usa
+   `http://lightdome.local` oppure l’indirizzo IP assegnato dal router.
+
+Le credenziali non sono presenti nel sorgente, non vengono salvate nell’app e
+non vengono restituite dalle API. Restano soltanto nella memoria locale della
+scheda.
 
 ## Funzioni principali
 
@@ -31,7 +40,8 @@ Per una panoramica completa di architettura, moduli, API e scelte progettuali ve
 - Programmi: elenco, Play/Stop/Delete su file `.ldy` presenti nel device.
 - Pattern locali: `Sine`, `Pulse` e `Mic reattivo` (senza account, stream in tempo reale).
 - Anteprima: pagina dedicata che mostra un alone radiale in tempo reale (segue il segnale TX, anche offline).
-- Impostazioni: gestione connessione (IP/mDNS). 
+- Impostazioni: configurazione Wi-Fi della scheda e gestione connessione
+  (IP/mDNS).
 
 ## Novità
 
@@ -48,12 +58,16 @@ Per una panoramica completa di architettura, moduli, API e scelte progettuali ve
 - Stato: `/api/state` (preferito) con fallback `/status`.
 - LIVE: `/set?y=` (0..1023), `/params?brightness=0..100&gamma=1.0..3.0&loop=0|1`.
 - Programmi: `/prog/list`, `/prog/start`, `/prog/stop`, `/prog/delete`.
+- Configurazione rete: `/wifi/status`, `/wifi/scan`, `/wifi/config`. Scansione
+  e salvataggio sono accettati solo da un client collegato all’AP di setup.
 
 ## Controllo e collaudo da PC
 
-Il firmware espone direttamente API HTTP e una WebUI tecnica. Quando il
-dispositivo usa l'AP `LightDome-Setup`, collegare il PC a quella rete e aprire
-`http://192.168.4.1` nel browser.
+Il firmware espone direttamente API HTTP e una WebUI tecnica. Se non riesce a
+collegarsi alla rete configurata, apre l’AP `LightDome-Setup`: collegare il PC a
+quella rete e aprire `http://192.168.4.1`. Il portale captive dovrebbe anche
+aprirsi automaticamente. Una volta collegato alla LAN, la WebUI tecnica è
+disponibile su `http://lightdome.local`.
 
 Per controllo e test da PowerShell, senza installare dipendenze:
 
