@@ -74,6 +74,13 @@ bool loopEnabled = false;
 // ---- STATO LIVE ----------------------------------------------------------
 uint16_t levelY = 0; // 0..1023 (pre-gamma/master)
 bool isOn = false;   // logico; a HW vale Y=0 se false
+float renderedLevelY = 0.0f;
+float transitionStartY = 0.0f;
+uint16_t targetLevelY = 0;
+uint16_t liveTransitionMs = 90;
+uint16_t activeTransitionMs = 0;
+uint32_t transitionStartedMs = 0;
+uint32_t lastRenderUs = 0;
 
 // ---- PLAYER RAM (compat) -------------------------------------------------
 struct Step {
@@ -148,6 +155,46 @@ void hwApplyY(uint16_t yRaw) {
   analogWrite(PIN_Y, applyGammaBright(y));
 }
 
+static inline float smoothStep01(float x) {
+  if (x <= 0.0f)
+    return 0.0f;
+  if (x >= 1.0f)
+    return 1.0f;
+  return x * x * (3.0f - 2.0f * x);
+}
+
+void setOutputTarget(uint16_t y, uint16_t transitionMs) {
+  targetLevelY = y;
+  levelY = y;
+  transitionStartY = renderedLevelY;
+  activeTransitionMs = transitionMs;
+  transitionStartedMs = millis();
+  isOn = y > 0 || renderedLevelY > 0.5f;
+  if (transitionMs == 0) {
+    renderedLevelY = y;
+    isOn = y > 0;
+    hwApplyY(y);
+  }
+}
+
+void updateSmoothOutput() {
+  const uint32_t nowUs = micros();
+  if ((uint32_t)(nowUs - lastRenderUs) < 4000)
+    return;
+  lastRenderUs = nowUs;
+  if (activeTransitionMs == 0 || fabsf(renderedLevelY - targetLevelY) < 0.5f) {
+    renderedLevelY = targetLevelY;
+  } else {
+    const uint32_t elapsed = millis() - transitionStartedMs;
+    const float p = smoothStep01((float)elapsed / activeTransitionMs);
+    renderedLevelY = transitionStartY + (targetLevelY - transitionStartY) * p;
+    if (elapsed >= activeTransitionMs)
+      renderedLevelY = targetLevelY;
+  }
+  isOn = targetLevelY > 0 || renderedLevelY > 0.5f;
+  hwApplyY((uint16_t)(renderedLevelY + 0.5f));
+}
+
 void enterLiveMode() {
   // Ferma qualsiasi player attivo
   if (programPlaying) {
@@ -172,134 +219,62 @@ void handleOptions() {
 }
 
 // ---- HTML (WebUI tecnica completa) ---------------------------------------
-const char PAGE[] PROGMEM =
-    R"HTML(<!doctype html>
-<html>
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LightDome - Mono</title>
+const char PAGE[] PROGMEM = R"HTML(<!doctype html>
+<html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0e0e"><title>LightDome</title>
 <style>
-:root{color-scheme:light;--bg:#f3f4f0;--surface:#fff;--surface2:#eef0eb;--text:#181b1a;--muted:#666d69;--line:#dce0d9;--accent:#755700;--accentBg:#fff0bd;--good:#17675f;--shadow:#17201b14}
-:root[data-theme=dark]{color-scheme:dark;--bg:#0a0d0d;--surface:#151919;--surface2:#202525;--text:#f2f4ef;--muted:#a7afaa;--line:#2b3230;--accent:#ffd66b;--accentBg:#332a0d;--good:#9bd7ce;--shadow:#0008}
-*{box-sizing:border-box}body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;margin:0;background:var(--bg);color:var(--text);min-height:100vh}main{max-width:1120px;margin:auto;padding:24px 18px 50px}
-header{display:flex;align-items:center;gap:12px;margin-bottom:22px}.brand{width:46px;height:46px;border-radius:15px;display:grid;place-items:center;background:var(--accentBg);color:var(--accent);font-size:23px}.headcopy{flex:1}h1{font-size:24px;letter-spacing:-.5px;margin:0}.eyebrow{color:var(--good);font-size:12px;font-weight:750;letter-spacing:.8px;text-transform:uppercase}.theme{width:auto;background:var(--surface);color:var(--text);border:1px solid var(--line)}
-.row{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}.card{grid-column:span 4;background:var(--surface);border:1px solid var(--line);border-radius:24px;padding:20px;box-shadow:0 14px 40px var(--shadow)}.card:first-child{grid-column:span 7}.card:nth-child(2){grid-column:span 5}.card:nth-child(3){grid-column:span 12}h3{margin:0 0 16px;font-size:17px;letter-spacing:-.2px}
-label{display:block;font-size:13px;color:var(--muted);margin:10px 0 7px}input,textarea{width:100%;color:var(--text);background:var(--surface2);border:1px solid var(--line);border-radius:14px;padding:12px;font:inherit}input[type=range]{padding:0;accent-color:var(--accent);border:0}input[type=checkbox]{width:auto;accent-color:var(--accent)}input[type=file]{padding:8px}input[type=file]::file-selector-button{border:0;border-radius:10px;background:var(--surface);color:var(--text);padding:8px 10px;margin-right:9px;font-weight:650}textarea{min-height:150px;font-family:ui-monospace,Consolas,monospace;resize:vertical}
-button{padding:10px 14px;border-radius:13px;border:1px solid var(--line);background:var(--surface2);color:var(--text);font:inherit;font-weight:650;cursor:pointer;margin:3px 2px}.on{background:var(--accent);color:var(--bg);border-color:var(--accent)}button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.mono{font-family:ui-monospace,Consolas,monospace}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.muted{color:var(--muted);font-size:13px;line-height:1.45}pre{background:var(--surface2);border-radius:14px;padding:12px;white-space:pre-wrap}
-@media(max-width:760px){main{padding:18px 12px 36px}.card,.card:first-child,.card:nth-child(2),.card:nth-child(3){grid-column:span 12}.grid{grid-template-columns:1fr}header{margin-bottom:16px}.theme{padding:9px 11px}}
-</style>
-</head>
-<body>
-<main><header><div class="brand">LD</div><div class="headcopy"><div class="eyebrow">Controllo locale</div><h1>LightDome</h1></div><button class="theme" onclick="toggleTheme()">Cambia tema</button></header>
+:root{color-scheme:light;--bg:#f3f4ef;--panel:#fff;--soft:#eef0eb;--soft2:#e5e8e1;--text:#171a19;--muted:#68706c;--line:#dce0d9;--accent:#765900;--accent2:#fff0b8;--good:#17675f;--danger:#a63a31;--shadow:#19231d12}
+:root[data-theme=dark]{color-scheme:dark;--bg:#090c0c;--panel:#151919;--soft:#202525;--soft2:#292f2e;--text:#f3f5f1;--muted:#a5ada9;--line:#2b3230;--accent:#ffd66b;--accent2:#342b0e;--good:#99d8ce;--danger:#ffb4a9;--shadow:#0007}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;min-height:100vh}button,input,select{font:inherit}button{cursor:pointer}.shell{max-width:1100px;margin:auto;padding:18px 18px 104px}
+.top{display:flex;align-items:center;gap:13px;min-height:52px;margin-bottom:20px}.mark{width:46px;height:46px;border-radius:16px;background:var(--accent2);color:var(--accent);display:grid;place-items:center;font-size:13px;font-weight:850;letter-spacing:.08em}.identity{flex:1}.identity h1{font-size:22px;letter-spacing:-.04em;margin:0}.connection{display:flex;align-items:center;gap:7px;color:var(--good);font-size:12px;font-weight:750;margin-top:3px}.dot{width:7px;height:7px;border-radius:50%;background:currentColor}.iconbtn{border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:14px;padding:10px 13px;font-weight:700}
+.view{display:none}.view.active{display:block}.intro{margin-bottom:16px}.intro h2{margin:0;font-size:29px;letter-spacing:-.05em}.intro p{margin:7px 0 0;color:var(--muted);line-height:1.5}.grid{display:grid;grid-template-columns:1.25fr .75fr;gap:14px}.card{background:var(--panel);border:1px solid var(--line);border-radius:26px;padding:20px;box-shadow:0 16px 40px var(--shadow)}.card h3{font-size:17px;margin:0;letter-spacing:-.02em}.sub{color:var(--muted);font-size:13px;line-height:1.45;margin:5px 0 0}
+.hero{min-height:390px;display:flex;flex-direction:column}.lampwrap{display:grid;place-items:center;flex:1;padding:18px}.lamp{width:172px;height:172px;border-radius:50%;background:var(--soft);border:1px solid var(--line);box-shadow:0 0 0 12px var(--soft);transition:background .18s ease,box-shadow .18s ease,transform .18s ease}.lamp.on{background:var(--accent2);box-shadow:0 0 0 12px var(--soft),0 0 62px color-mix(in srgb,var(--accent) 42%,transparent);transform:scale(1.015)}
+.levelrow{display:flex;align-items:end;justify-content:space-between;margin-bottom:12px}.levelrow strong{font-size:42px;letter-spacing:-.06em;font-weight:400}.range{width:100%;accent-color:var(--accent);height:28px}.quick{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin-top:12px}.quick button,.preset,.action,.ghost{border-radius:14px;padding:11px;border:1px solid var(--line);font-weight:720}.quick button,.ghost{background:var(--soft);color:var(--text)}.action{background:var(--accent);color:var(--bg);border-color:var(--accent)}.action:disabled{opacity:.45}.statusline{display:flex;align-items:center;gap:10px;padding:13px 0;border-bottom:1px solid var(--line)}.statusline:last-child{border-bottom:0}.statuscopy{flex:1}.statuscopy b{display:block;font-size:14px}.statuscopy span{font-size:12px;color:var(--muted)}.value{font-size:13px;font-weight:750}
+.presetrow{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin:16px 0}.preset{background:var(--soft);color:var(--text);text-align:left;min-height:76px}.preset.active{background:var(--accent2);border-color:var(--accent);color:var(--accent)}.preset b{display:block;margin-bottom:5px}.preset span{font-size:11px;color:var(--muted)}.formgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.field{display:block}.field>span{display:flex;justify-content:space-between;color:var(--muted);font-size:12px;font-weight:650;margin:0 2px 7px}.field input:not([type=range]),.field select{width:100%;border:1px solid var(--line);background:var(--soft);color:var(--text);padding:12px 13px;border-radius:14px}.preview{height:132px;background:var(--soft);border-radius:18px;margin:16px 0;padding:10px}.preview canvas{width:100%;height:100%}.switchrow{display:flex;align-items:center;gap:10px;margin:11px 0}.switchrow input{width:19px;height:19px;accent-color:var(--accent)}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}.notice{margin-top:12px;padding:12px 14px;border-radius:14px;background:var(--soft);color:var(--muted);font-size:13px}.notice.good{background:#ddefe8;color:#115d51}.notice.bad{background:#f8dfdc;color:#912e27}
+.programs{display:grid;gap:9px;margin-top:15px}.program{display:flex;align-items:center;gap:12px;background:var(--soft);border:1px solid var(--line);border-radius:17px;padding:13px}.programmain{flex:1;min-width:0}.programmain b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.programmain span{font-size:12px;color:var(--muted)}.program button{padding:9px 11px}.empty{padding:26px;text-align:center;color:var(--muted)}
+details{border-top:1px solid var(--line);margin-top:16px;padding-top:12px}summary{font-weight:750;cursor:pointer}.advanced{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}.technical{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;white-space:pre-wrap;background:var(--soft);border-radius:16px;padding:14px;min-height:120px}
+.guide{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:16px}.guide div{background:var(--soft);border-radius:18px;padding:16px}.guide b{display:block;margin-bottom:7px}.guide span{font-size:13px;color:var(--muted);line-height:1.45}
+.nav{position:fixed;z-index:4;left:50%;bottom:max(12px,env(safe-area-inset-bottom));transform:translateX(-50%);display:grid;grid-template-columns:repeat(4,1fr);width:min(620px,calc(100% - 24px));padding:7px;background:color-mix(in srgb,var(--panel) 94%,transparent);border:1px solid var(--line);border-radius:23px;box-shadow:0 18px 50px #0004;backdrop-filter:blur(16px)}.nav button{border:0;background:transparent;color:var(--muted);padding:11px 8px;border-radius:16px;font-size:12px;font-weight:750}.nav button.active{background:var(--accent2);color:var(--accent)}
+button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}@media(max-width:720px){.shell{padding:14px 12px 100px}.grid,.formgrid,.advanced{grid-template-columns:1fr}.hero{min-height:360px}.presetrow{grid-template-columns:1fr 1fr}.guide{grid-template-columns:1fr}.intro h2{font-size:25px}.lamp{width:145px;height:145px}.quick{grid-template-columns:repeat(5,1fr)}.quick button{padding:10px 4px;font-size:12px}}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+</style></head><body><main class="shell">
+<header class="top"><div class="mark">LD</div><div class="identity"><h1>LightDome</h1><div class="connection"><span class="dot"></span><span id="connectionText">Cupola pronta</span></div></div><button class="iconbtn" id="themeBtn" type="button">Tema</button></header>
 
-<div class="row">
-  <div class="card">
-    <h3>LIVE</h3>
-    <label>Livello (0-1023)
-      <input id="y" type="range" min="0" max="1023" value="0" oninput="setY()">
-    </label>
-    <div class="grid">
-      <label>Brightness master (%) <input id="br" type="range" min="0" max="100" value="100" oninput="setParams()"></label>
-      <label>Gamma (1.0-3.0) <input id="gm" type="range" min="10" max="30" value="20" oninput="setParams()"></label>
-    </div>
-    <div class="muted">Ogni comando LIVE sospende il PROGRAM in esecuzione.</div>
-    <div style="margin-top:8px">
-      <button onclick="off()">Off</button>
-      <button onclick="pulseDemo()">Pulse demo</button>
-    </div>
-  </div>
+<section class="view active" data-view="home"><div class="intro"><h2>La tua luce, subito.</h2><p>Regola l’atmosfera. I pattern salvati continuano anche quando chiudi questa pagina.</p></div>
+<div class="grid"><article class="card hero"><div class="levelrow"><div><h3>Intensità</h3><p class="sub" id="modeText">Controllo manuale</p></div><strong id="levelText">0%</strong></div><div class="lampwrap"><div id="lamp" class="lamp"></div></div><input aria-label="Intensità luce" class="range" id="level" type="range" min="0" max="1023" value="0"><div class="quick"><button data-level="0">Off</button><button data-level="256">25%</button><button data-level="512">50%</button><button data-level="767">75%</button><button data-level="1023">100%</button></div></article>
+<aside class="card"><h3>Adesso</h3><p class="sub">Le informazioni utili, senza dettagli tecnici.</p><div class="statusline"><div class="statuscopy"><b>Stato</b><span id="humanState">In attesa</span></div><span class="value" id="stateBadge">—</span></div><div class="statusline"><div class="statuscopy"><b>Pattern</b><span id="programState">Nessuno in esecuzione</span></div><button class="ghost" id="stopBtn">Ferma</button></div><div class="statusline"><div class="statuscopy"><b>Continuità</b><span>La cupola lavora senza telefono</span></div><span class="value">Locale</span></div><div class="actions"><button class="action" data-go="create">Crea un pattern</button><button class="ghost" data-go="library">I miei pattern</button></div></aside></div></section>
 
-  <div class="card">
-    <h3>PROGRAM (file .ldy)</h3>
-    <div class="grid">
-      <input id="fname" placeholder="Nome programma" />
-      <label>Loop <input id="loop" type="checkbox"></label>
-    </div>
-    <div class="muted">Carica un file .ldy: header LDY1 + campioni uint16 LE</div>
-    <input type="file" id="file" />
-    <div style="margin-top:8px">
-      <button class="on" onclick="saveProg()">Salva</button>
-      <button onclick="startProg()">Start</button>
-      <button onclick="stopProg()">Stop</button>
-      <button onclick="listProg()">Lista</button>
-      <button onclick="delProg()">Delete</button>
-    </div>
-    <pre id="out" class="mono" style="margin-top:8px;max-height:220px;overflow:auto"></pre>
-  </div>
+<section class="view" data-view="create"><div class="intro"><h2>Crea un’atmosfera</h2><p>Scegli uno stile, personalizzalo e salvalo direttamente nella cupola.</p></div><article class="card"><h3>Parti da qui</h3><div class="presetrow"><button class="preset active" data-preset="breath"><b>Respiro</b><span>Morbido e continuo</span></button><button class="preset" data-preset="pulse"><b>Battito</b><span>Ritmico e definito</span></button><button class="preset" data-preset="sunrise"><b>Alba</b><span>Crescita lenta</span></button><button class="preset" data-preset="random"><b>Organico</b><span>Variazioni naturali</span></button></div>
+<div class="formgrid"><label class="field"><span><b>Nome</b><em>solo lettere e numeri</em></span><input id="patternName" maxlength="32" value="respiro"></label><label class="field"><span><b>Durata ciclo</b><output id="durationOut">4,0 s</output></span><input class="range" id="duration" type="range" min="1" max="20" step=".5" value="4"></label><label class="field"><span><b>Minimo</b><output id="minOut">8%</output></span><input class="range" id="minimum" type="range" min="0" max="90" value="8"></label><label class="field"><span><b>Massimo</b><output id="maxOut">100%</output></span><input class="range" id="maximum" type="range" min="10" max="100" value="100"></label><label class="field"><span><b>Ritmo / duty</b><output id="dutyOut">50%</output></span><input class="range" id="duty" type="range" min="5" max="95" value="50"></label><label class="field"><span><b>Curva</b><em>sensazione del movimento</em></span><select id="easing"><option value="smooth">Morbida</option><option value="sine">Naturale</option><option value="linear">Lineare</option><option value="sharp">Netta</option></select></label></div>
+<div class="preview"><canvas id="patternCanvas" width="900" height="220"></canvas></div><label class="switchrow"><input id="loop" type="checkbox" checked><span><b>Continua finché non la fermo</b><br><small class="sub">Funziona anche con app e pagina chiuse.</small></span></label><label class="switchrow"><input id="autorun" type="checkbox"><span><b>Riparti dopo uno spegnimento</b><br><small class="sub">Imposta questo pattern come avvio automatico.</small></span></label>
+<details><summary>Opzioni avanzate</summary><div class="advanced"><label class="field"><span><b>Campioni al secondo</b></span><select id="sampleRate"><option>50</option><option selected>100</option><option>150</option></select></label><label class="field"><span><b>Casualità</b><output id="randomOut">20%</output></span><input class="range" id="randomness" type="range" min="0" max="100" value="20"></label></div><p class="sub">Audio, bassi, medi, alti, attack e release useranno lo stesso motore tramite una sorgente esterna. I pattern normali restano completamente autonomi.</p></details>
+<div class="actions"><button class="ghost" id="tryPattern">Prova</button><button class="action" id="savePattern">Salva e avvia</button></div><div class="notice" id="createNotice">Pronto per creare il pattern.</div></article></section>
 
-  <div class="card">
-    <h3>Pattern RAM (test rapido)</h3>
-    <textarea id="pat" placeholder="100,0&#10;500,1023&#10;300,400&#10;300,0"></textarea>
-    <div style="margin-top:8px">
-      <button class="on" onclick="uploadPattern()">Carica</button>
-      <button onclick="play()">Play</button>
-      <button onclick="stopPlay()">Stop</button>
-      <button onclick="clearArea()">Clear</button>
-    </div>
-    <h3>Stato</h3>
-    <div id="st" class="mono">...</div>
-  </div>
-</div></main>
+<section class="view" data-view="library"><div class="intro"><h2>I tuoi pattern</h2><p>Sono conservati nella cupola e non dipendono dall’app.</p></div><article class="card"><div class="levelrow"><div><h3>Libreria locale</h3><p class="sub">Avvia, sostituisci o rimuovi un pattern.</p></div><button class="ghost" id="refreshPrograms">Aggiorna</button></div><div class="programs" id="programs"><div class="empty">Caricamento…</div></div><details><summary>Importa un file .ldy</summary><div class="formgrid" style="margin-top:14px"><label class="field"><span><b>Nome</b></span><input id="importName" placeholder="nome_pattern"></label><label class="field"><span><b>File</b></span><input id="importFile" type="file" accept=".ldy"></label></div><div class="actions"><button class="action" id="importBtn">Importa</button></div></details><div class="notice" id="libraryNotice">I pattern avviati continuano anche senza questa pagina.</div></article></section>
 
+<section class="view" data-view="more"><div class="intro"><h2>Aiuto e impostazioni</h2><p>Le azioni quotidiane restano semplici; i dettagli tecnici sono qui quando servono.</p></div><article class="card"><h3>Primi passi</h3><div class="guide"><div><b>1. Regola</b><span>Usa Home per cambiare la luce in tempo reale.</span></div><div><b>2. Crea</b><span>Personalizza un preset e controlla l’anteprima.</span></div><div><b>3. Lascia fare</b><span>Salva: la cupola continuerà da sola.</span></div></div><details><summary>Controlli avanzati</summary><div class="advanced"><label class="field"><span><b>Limite luminosità</b><output id="masterOut">100%</output></span><input class="range" id="master" type="range" min="0" max="100" value="100"></label><label class="field"><span><b>Gamma</b><output id="gammaOut">2,0</output></span><input class="range" id="gamma" type="range" min="10" max="30" value="20"></label></div><div class="actions"><a class="ghost" href="/wifi" style="text-decoration:none">Configura Wi-Fi</a></div></details><details><summary>Diagnostica</summary><pre class="technical" id="technical">Caricamento…</pre></details></article></section>
+</main><nav class="nav" aria-label="Navigazione principale"><button class="active" data-nav="home">Home</button><button data-nav="create">Crea</button><button data-nav="library">Pattern</button><button data-nav="more">Altro</button></nav>
 <script>
-const stDiv = document.getElementById('st');
-const y  = document.getElementById('y');
-const br = document.getElementById('br');
-const gm = document.getElementById('gm');
-const lp = document.getElementById('loop');
-const pat = document.getElementById('pat');
-const fname = document.getElementById('fname');
-const file = document.getElementById('file');
-const out  = document.getElementById('out');
-function applyTheme(v){document.documentElement.dataset.theme=v;localStorage.setItem('ld-theme',v)}
-function toggleTheme(){applyTheme(document.documentElement.dataset.theme==='dark'?'light':'dark')}
-applyTheme(localStorage.getItem('ld-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'));
-
-function setY(){ fetch(`/set?y=${y.value}`); }
-function setParams(){
-  const gamma = (gm.value/10).toFixed(1);
-  fetch(`/params?brightness=${br.value}&gamma=${gamma}&loop=${lp.checked?1:0}`);
-}
-function off(){ y.value = 0; fetch('/set?y=0'); }
-function pulseDemo(){ fetch('/demo'); }
-function uploadPattern(){
-  fetch('/pattern',{method:'POST',headers:{'Content-Type':'text/plain'},body:pat.value})
-    .then(r=>r.text()).then(t=>{out.textContent=t; updateStatus();});
-}
-function play(){ fetch('/play',{method:'POST'}).then(updateStatus); }
-function stopPlay(){ fetch('/stop',{method:'POST'}).then(updateStatus); }
-function clearArea(){ pat.value=''; }
-function saveProg(){
-  const n = (fname.value||'').trim();
-  if (!n || !file.files[0]) { out.textContent='Scegli nome e file'; return; }
-  const params = new URLSearchParams({name:n, sr:0, autorun:0});
-  fetch('/prog/save?'+params.toString(), {method:'POST', body:file.files[0]})
-    .then(r=>r.text()).then(t=>out.textContent=t);
-}
-function startProg(){
-  const n = (fname.value||'').trim(); if (!n){out.textContent='Nome mancante';return;}
-  fetch('/prog/start?name='+encodeURIComponent(n), {method:'POST'})
-    .then(r=>r.text()).then(t=>{out.textContent=t; updateStatus();});
-}
-function stopProg(){ fetch('/prog/stop',{method:'POST'}).then(r=>r.text()).then(t=>{out.textContent=t; updateStatus();}); }
-function listProg(){ fetch('/prog/list').then(r=>r.text()).then(t=>out.textContent=t); }
-function delProg(){
-  const n=(fname.value||'').trim(); if(!n){out.textContent='Nome mancante';return;}
-  fetch('/prog/delete?name='+encodeURIComponent(n),{method:'DELETE'}).then(r=>r.text()).then(t=>out.textContent=t);
-}
-function updateStatus(){
-  fetch('/status').then(r=>r.json()).then(s=>{
-    stDiv.textContent = JSON.stringify(s,null,2);
-    br.value = Math.round(s.masterBrightness*100);
-    gm.value = Math.round(s.gamma*10);
-    lp.checked = s.loop;
-    y.value = s.levelY;
-  });
-}
-setInterval(updateStatus, 1000); updateStatus();
-</script>
-</body></html>)HTML";
+const $=id=>document.getElementById(id),state={drag:false,last:null,preset:'breath',programs:[]};let sendTimer=0,paramTimer=0;
+function applyTheme(v){document.documentElement.dataset.theme=v;localStorage.setItem('ld-theme',v)}applyTheme(localStorage.getItem('ld-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'));$('themeBtn').onclick=()=>applyTheme(document.documentElement.dataset.theme==='dark'?'light':'dark');
+function go(name){document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.dataset.view===name));document.querySelectorAll('[data-nav]').forEach(b=>b.classList.toggle('active',b.dataset.nav===name));scrollTo({top:0,behavior:'smooth'});if(name==='library')loadPrograms()}document.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>go(b.dataset.nav));document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>go(b.dataset.go));
+function renderLevel(v){const p=Math.round(v/10.23);$('levelText').textContent=p+'%';$('lamp').classList.toggle('on',v>0);$('lamp').style.opacity=(.55+.45*p/100).toFixed(2)}
+function queueLevel(v,final=false){renderLevel(v);clearTimeout(sendTimer);sendTimer=setTimeout(()=>fetch('/set?y='+Math.round(v)+'&smooth='+(final?70:110)).catch(()=>{}),final?0:45)}
+$('level').onpointerdown=()=>state.drag=true;$('level').oninput=e=>queueLevel(+e.target.value);$('level').onchange=e=>{state.drag=false;queueLevel(+e.target.value,true)};document.querySelectorAll('[data-level]').forEach(b=>b.onclick=()=>{$('level').value=b.dataset.level;queueLevel(+b.dataset.level,true)});$('stopBtn').onclick=async()=>{await fetch('/prog/stop',{method:'POST'});await fetch('/set?y=0&smooth=120');refreshState()};
+async function refreshState(){try{const r=await fetch('/status'),s=await r.json();state.last=s;$('connectionText').textContent='Cupola pronta';if(!state.drag){$('level').value=s.levelY;renderLevel(s.levelY)}$('master').value=Math.round(s.masterBrightness*100);$('gamma').value=Math.round(s.gamma*10);$('masterOut').textContent=Math.round(s.masterBrightness*100)+'%';$('gammaOut').textContent=s.gamma.toFixed(1).replace('.',',');const playing=s.mode.programPlaying;$('modeText').textContent=playing?'Pattern autonomo':'Controllo manuale';$('humanState').textContent=playing?'Sta riproducendo un pattern':s.on?'Luce accesa e pronta':'Luce spenta e pronta';$('stateBadge').textContent=s.on?'Accesa':'Spenta';$('programState').textContent=playing?(s.mode.programName||'Pattern in esecuzione'):'Nessuno in esecuzione';$('technical').textContent=JSON.stringify(s,null,2)}catch(e){$('connectionText').textContent='Connessione interrotta';$('humanState').textContent='Non riesco a raggiungere la cupola';$('stateBadge').textContent='Offline'}}
+function queueParams(){clearTimeout(paramTimer);paramTimer=setTimeout(()=>fetch('/params?brightness='+$('master').value+'&gamma='+($('gamma').value/10).toFixed(1)+'&loop='+($('loop').checked?1:0)),100)}$('master').oninput=()=>{$('masterOut').textContent=$('master').value+'%';queueParams()};$('gamma').oninput=()=>{$('gammaOut').textContent=($('gamma').value/10).toFixed(1).replace('.',',');queueParams()};
+const inputs=['duration','minimum','maximum','duty','randomness','easing'];inputs.forEach(id=>$(id).oninput=updateBuilder);document.querySelectorAll('[data-preset]').forEach(b=>b.onclick=()=>{state.preset=b.dataset.preset;document.querySelectorAll('[data-preset]').forEach(x=>x.classList.toggle('active',x===b));const p={breath:[4,8,100,50,'smooth'],pulse:[1.4,5,100,35,'sharp'],sunrise:[12,2,100,80,'sine'],random:[6,18,82,50,'smooth']}[state.preset];$('duration').value=p[0];$('minimum').value=p[1];$('maximum').value=p[2];$('duty').value=p[3];$('easing').value=p[4];$('patternName').value=state.preset==='breath'?'respiro':state.preset==='pulse'?'battito':state.preset==='sunrise'?'alba':'organico';updateBuilder()});
+function ease(t,type){if(type==='linear')return t;if(type==='sharp')return t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;if(type==='sine')return-(Math.cos(Math.PI*t)-1)/2;return t*t*(3-2*t)}
+function valueAt(t){const min=+$('minimum').value/100,max=+$('maximum').value/100,duty=+$('duty').value/100,e=$('easing').value;if(state.preset==='sunrise')return min+(max-min)*ease(t,e);if(state.preset==='pulse'){const edge=.12;if(t<duty){const q=t/duty;return q<edge?min+(max-min)*ease(q/edge,e):q>1-edge?max-(max-min)*ease((q-1+edge)/edge,e):max}return min}if(state.preset==='random'){const wobble=(Math.sin(t*19.7)+Math.sin(t*43.1)*.45+Math.sin(t*7.3)*.7)/2.15*.5+.5;const mix=+$('randomness').value/100;const base=(1-Math.cos(t*Math.PI*2))/2;return min+(max-min)*(base*(1-mix)+wobble*mix)}const wave=(1-Math.cos(t*Math.PI*2))/2;return min+(max-min)*ease(wave,e)}
+function updateBuilder(){$('durationOut').textContent=(+$('duration').value).toFixed(1).replace('.',',')+' s';$('minOut').textContent=$('minimum').value+'%';$('maxOut').textContent=$('maximum').value+'%';$('dutyOut').textContent=$('duty').value+'%';$('randomOut').textContent=$('randomness').value+'%';if(+$('minimum').value>+$('maximum').value)$('minimum').value=$('maximum').value;drawPreview()}
+function drawPreview(){const c=$('patternCanvas'),x=c.getContext('2d'),w=c.width,h=c.height;x.clearRect(0,0,w,h);x.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--line');x.lineWidth=2;for(let i=1;i<4;i++){x.beginPath();x.moveTo(0,h*i/4);x.lineTo(w,h*i/4);x.stroke()}x.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--accent');x.lineWidth=7;x.lineCap='round';x.beginPath();for(let i=0;i<=w;i++){const y=h-12-valueAt(i/w)*(h-24);i?x.lineTo(i,y):x.moveTo(i,y)}x.stroke()}
+function makeLdy(){const sr=+$('sampleRate').value,duration=+$('duration').value,frames=Math.max(2,Math.round(sr*duration)),buf=new ArrayBuffer(12+frames*2),v=new DataView(buf);v.setUint8(0,76);v.setUint8(1,68);v.setUint8(2,89);v.setUint8(3,49);v.setUint16(4,sr,true);v.setUint32(6,frames,true);v.setUint16(10,0,true);for(let i=0;i<frames;i++)v.setUint16(12+i*2,Math.round(valueAt(i/(frames-1))*1023),true);return buf}
+function validName(n){return /^[A-Za-z0-9_-]{1,48}$/.test(n)}
+async function uploadGenerated(start){const n=$('patternName').value.trim();if(!validName(n)){showNotice('createNotice','Usa un nome breve con lettere, numeri, trattino o underscore.','bad');return}showNotice('createNotice','Sto salvando il pattern nella cupola…');try{await fetch('/params?loop='+($('loop').checked?1:0));const form=new FormData();form.append('file',new Blob([makeLdy()],{type:'application/octet-stream'}),n+'.ldy');const r=await fetch('/prog/save?name='+encodeURIComponent(n)+'&autorun='+($('autorun').checked?1:0),{method:'POST',body:form});const t=await r.text();if(!r.ok)throw Error(t);if(start)await fetch('/prog/start?name='+encodeURIComponent(n),{method:'POST'});showNotice('createNotice',start?'Pattern salvato e avviato. Puoi chiudere la pagina.':'Anteprima avviata sulla cupola.','good');refreshState()}catch(e){showNotice('createNotice','Non sono riuscito a salvare: '+e.message,'bad')}}
+function showNotice(id,text,type=''){$(id).textContent=text;$(id).className='notice '+type}$('tryPattern').onclick=()=>uploadGenerated(true);$('savePattern').onclick=()=>uploadGenerated(true);
+async function loadPrograms(){const box=$('programs');box.innerHTML='<div class="empty">Caricamento…</div>';try{const t=await fetch('/prog/list').then(r=>r.text()),items=t.split('\n').map(x=>x.trim()).filter(x=>x&&x!=='(vuoto)').map(x=>x.replace(/^\/prog\//,'').replace(/\.ldy.*$/,''));state.programs=items;box.replaceChildren();if(!items.length){box.innerHTML='<div class="empty">Non hai ancora salvato pattern.</div>';return}items.forEach(n=>{const row=document.createElement('div');row.className='program';const main=document.createElement('div');main.className='programmain';const b=document.createElement('b');b.textContent=n;const s=document.createElement('span');s.textContent=state.last?.mode?.programName===n?'In esecuzione':'Salvato nella cupola';main.append(b,s);const play=document.createElement('button');play.className='action';play.textContent='Avvia';play.onclick=async()=>{await fetch('/prog/start?name='+encodeURIComponent(n),{method:'POST'});showNotice('libraryNotice','Pattern avviato. Continuerà anche chiudendo la pagina.','good');loadPrograms();refreshState()};const del=document.createElement('button');del.className='ghost';del.textContent='Elimina';del.onclick=async()=>{if(!confirm('Eliminare '+n+'?'))return;await fetch('/prog/delete?name='+encodeURIComponent(n),{method:'DELETE'});loadPrograms()};row.append(main,play,del);box.append(row)})}catch(e){box.innerHTML='<div class="empty">Impossibile leggere la libreria.</div>'}}
+$('refreshPrograms').onclick=loadPrograms;$('importBtn').onclick=async()=>{const n=$('importName').value.trim(),f=$('importFile').files[0];if(!validName(n)||!f){showNotice('libraryNotice','Scegli un file e inserisci un nome valido.','bad');return}const form=new FormData();form.append('file',f,f.name);const r=await fetch('/prog/save?name='+encodeURIComponent(n)+'&autorun=0',{method:'POST',body:form}),t=await r.text();showNotice('libraryNotice',t,r.ok?'good':'bad');loadPrograms()};
+updateBuilder();refreshState();setInterval(refreshState,1200);
+</script></body></html>)HTML";
 
 const char WIFI_PAGE[] PROGMEM = R"HTML(<!doctype html>
 <html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -339,7 +314,10 @@ $('scan').onclick=scan;$('save').onclick=save;$('show').onclick=()=>{const p=$('
 // -------------------- HANDLERS BASE ---------------------------------------
 void handleRoot() {
   sendCORS();
-  server.send(200, "text/html", apActive ? FPSTR(WIFI_PAGE) : FPSTR(PAGE));
+  if (apActive)
+    server.send_P(200, "text/html", WIFI_PAGE);
+  else
+    server.send_P(200, "text/html", PAGE);
 }
 
 void handleStatus() {
@@ -353,6 +331,9 @@ void handleStatus() {
   doc["loop"] = loopEnabled;
   doc["on"] = isOn;
   doc["levelY"] = levelY;
+  doc["outputLevelY"] = (uint16_t)(renderedLevelY + 0.5f);
+  doc["targetLevelY"] = targetLevelY;
+  doc["smoothMs"] = liveTransitionMs;
   JsonObject mode = doc["mode"].to<JsonObject>();
   mode["programPlaying"] = programPlaying;
   mode["ramPlaying"] = ramPlaying;
@@ -376,8 +357,10 @@ void handleSet() {
   }
   enterLiveMode();
   levelY = clamp16(server.arg("y").toInt(), 0, 1023);
-  isOn = (levelY > 0);
-  hwApplyY(levelY);
+  uint16_t transitionMs = liveTransitionMs;
+  if (server.hasArg("smooth"))
+    transitionMs = clamp16(server.arg("smooth").toInt(), 0, 1000);
+  setOutputTarget(levelY, transitionMs);
   server.send(200, "text/plain", "OK");
 }
 
@@ -397,7 +380,7 @@ void handleParams() {
   }
   if (server.hasArg("loop"))
     loopEnabled = (server.arg("loop").toInt() != 0);
-  hwApplyY(levelY);
+  hwApplyY((uint16_t)(renderedLevelY + 0.5f));
   server.send(200, "text/plain", "OK");
 }
 
@@ -504,22 +487,18 @@ void handlePlay() {
 void handleStopRAM() {
   sendCORS();
   ramPlaying = false;
-  isOn = false;
-  hwApplyY(0);
+  setOutputTarget(0, liveTransitionMs);
   server.send(200, "text/plain", "Stop RAM");
 }
 void handleDemo() {
   sendCORS();
   enterLiveMode();
   for (int i = 0; i <= 1023; i += 16) {
-    levelY = i;
-    isOn = true;
-    hwApplyY(levelY);
+    setOutputTarget(i, 0);
     delay(2);
   }
   for (int i = 1023; i >= 0; i -= 16) {
-    levelY = i;
-    hwApplyY(levelY);
+    setOutputTarget(i, 0);
     delay(2);
   }
   server.send(200, "text/plain", "Demo ok");
@@ -542,6 +521,9 @@ void handleApiStateGet() {
                     ? "program"
                     : (ramPlaying ? "program" : (isOn ? "live" : "idle"));
   doc["level"] = levelY;
+  doc["outputLevel"] = (uint16_t)(renderedLevelY + 0.5f);
+  doc["targetLevel"] = targetLevelY;
+  doc["smoothMs"] = liveTransitionMs;
   doc["loop"] = loopEnabled;
   doc["programName"] = programName;
   doc["sampleRateHz"] = sampleRateHz;
@@ -593,9 +575,10 @@ void handleApiStatePost() {
     int final255 = (base255 < y255) ? base255 : y255;
     tgtY = (int)round((final255 / 255.0f) * 1023.0f);
   }
-  isOn = reqOn;
-  levelY = clamp16(tgtY, 0, 1023);
-  hwApplyY(levelY);
+  uint16_t smoothMs = liveTransitionMs;
+  if (!doc["smoothMs"].isNull())
+    smoothMs = clamp16(doc["smoothMs"].as<int>(), 0, 1000);
+  setOutputTarget(reqOn ? clamp16(tgtY, 0, 1023) : 0, smoothMs);
   server.send(204);
 }
 
@@ -705,10 +688,14 @@ void handleProgSaveMeta() {
     server.send(503, "text/plain", "LittleFS non disponibile");
     return;
   }
-  if (!uploadName.length() || !isValidProgramName(uploadName)) {
+  String requestedName = server.hasArg("name") ? server.arg("name") : String();
+  if (!requestedName.length() || !isValidProgramName(requestedName)) {
+    if (uploadTempPath.length())
+      LittleFS.remove(uploadTempPath);
     server.send(400, "text/plain", "Nome programma non valido");
     return;
   }
+  uploadName = requestedName;
   if (uploadHasError) {
     server.send(500, "text/plain", uploadErrorMessage);
     return;
@@ -785,19 +772,19 @@ void handleProgSaveMeta() {
 void handleProgSaveUpload() {
   HTTPUpload &up = server.upload();
   if (up.status == UPLOAD_FILE_START) {
-    uploadName = server.hasArg("name") ? server.arg("name") : String("unnamed");
+    uploadName = "";
     uploadTempPath = "";
     uploadCompleted = false;
     uploadAborted = false;
     uploadHasError = false;
     uploadErrorMessage = "";
-    if (!littleFsMounted || !isValidProgramName(uploadName)) {
+    if (!littleFsMounted) {
       uploadHasError = true;
-      uploadErrorMessage = "Nome programma non valido";
+      uploadErrorMessage = "LittleFS non disponibile";
       return;
     }
     LittleFS.mkdir(PROG_DIR);
-    uploadTempPath = programTempPath(uploadName);
+    uploadTempPath = String(PROG_DIR) + "/.incoming.upload";
     LittleFS.remove(uploadTempPath);
     uploadFile = LittleFS.open(uploadTempPath, "w");
     if (!uploadFile) {
@@ -1016,7 +1003,7 @@ void sendWifiError(int status, const String &message) {
 
 void handleWifiPage() {
   sendCORS();
-  server.send(200, "text/html", FPSTR(WIFI_PAGE));
+  server.send_P(200, "text/html", WIFI_PAGE);
 }
 
 void handleWifiStatus() {
@@ -1250,9 +1237,7 @@ void loop() {
         uint16_t y = (uint16_t)(buf[0] | (buf[1] << 8));
         if (y > 1023)
           y = 1023;
-        levelY = y;
-        isOn = (y > 0);
-        hwApplyY(levelY);
+        setOutputTarget(y, 0);
         frameIndex++;
       } else {
         if (loopEnabled) {
@@ -1279,9 +1264,9 @@ void loop() {
     if (ramPlaying) {
       uint16_t y = rgbToY_0_1023(steps[stepIndex].r, steps[stepIndex].g,
                                  steps[stepIndex].b);
-      isOn = (y > 0);
-      levelY = y;
-      hwApplyY(levelY);
+      setOutputTarget(y, 0);
     }
   }
+  if (!programPlaying && !ramPlaying)
+    updateSmoothOutput();
 }

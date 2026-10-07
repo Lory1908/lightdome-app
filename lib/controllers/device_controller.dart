@@ -196,9 +196,17 @@ class DeviceController extends ChangeNotifier {
     await refreshOnce();
   }
 
-  Future<void> setParams({double? brightnessPct, double? gamma, bool? loop}) async {
+  Future<void> setParams({
+    double? brightnessPct,
+    double? gamma,
+    bool? loop,
+  }) async {
     try {
-      await _api?.setParams(brightnessPct: brightnessPct, gamma: gamma, loop: loop);
+      await _api?.setParams(
+        brightnessPct: brightnessPct,
+        gamma: gamma,
+        loop: loop,
+      );
     } catch (_) {}
     await refreshOnce();
   }
@@ -251,6 +259,32 @@ class DeviceController extends ChangeNotifier {
         }
       },
     );
+    await refreshOnce();
+  }
+
+  Future<void> saveGeneratedProgram({
+    required String name,
+    required int sampleRateHz,
+    required List<int> samples,
+    required bool loop,
+    required bool autorun,
+    bool start = true,
+  }) async {
+    final api = _api;
+    if (api == null) {
+      throw Exception('Cupola non connessa');
+    }
+    await api.setParams(loop: loop);
+    final bytes = LdyEncoder.encode(sampleRateHz: sampleRateHz, y1023: samples);
+    await api.saveProgramLdy(
+      name: name,
+      bytes: bytes,
+      sampleRateHz: sampleRateHz,
+      autorun: autorun,
+    );
+    if (start) {
+      await api.startProgram(name);
+    }
     await refreshOnce();
   }
 
@@ -309,9 +343,17 @@ class DeviceController extends ChangeNotifier {
   }) async {
     final api = _api;
     if (api == null) return null;
-    final ys = await EnvelopeBuilder.fromAudioFile(path: filePath, sampleRateHz: sampleRateHz);
+    final ys = await EnvelopeBuilder.fromAudioFile(
+      path: filePath,
+      sampleRateHz: sampleRateHz,
+    );
     final bytes = LdyEncoder.encode(sampleRateHz: sampleRateHz, y1023: ys);
-    final res = await api.saveProgramLdy(name: name, bytes: bytes, sampleRateHz: sampleRateHz, autorun: autorun);
+    final res = await api.saveProgramLdy(
+      name: name,
+      bytes: bytes,
+      sampleRateHz: sampleRateHz,
+      autorun: autorun,
+    );
     return res;
   }
 

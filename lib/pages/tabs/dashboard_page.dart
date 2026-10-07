@@ -3,8 +3,16 @@ import 'package:flutter/material.dart';
 import '../../controllers/device_controller.dart';
 import '../../core/models/pattern.dart';
 
-class DashboardPage extends StatelessWidget {
+class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
+
+  @override
+  State<DashboardPage> createState() => _DashboardPageState();
+}
+
+class _DashboardPageState extends State<DashboardPage> {
+  double _localLevel = 0;
+  bool _dragging = false;
 
   @override
   Widget build(BuildContext context) {
@@ -13,6 +21,7 @@ class DashboardPage extends StatelessWidget {
       animation: ctrl,
       builder: (context, _) {
         final state = ctrl.state;
+        if (!_dragging) _localLevel = state.y.clamp(0.0, 1.0);
         final metrics = <Widget>[
           _metricCard(
             context,
@@ -196,20 +205,59 @@ class DashboardPage extends StatelessWidget {
                 ),
               ],
             );
-            if (compact) {
-              return Column(
-                children: [
-                  lamp,
-                  const SizedBox(height: 22),
-                  Align(alignment: Alignment.centerLeft, child: details),
-                ],
-              );
-            }
-            return Row(
+            final content = compact
+                ? Column(
+                    children: [
+                      lamp,
+                      const SizedBox(height: 22),
+                      Align(alignment: Alignment.centerLeft, child: details),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      lamp,
+                      const SizedBox(width: 28),
+                      Expanded(child: details),
+                    ],
+                  );
+            return Column(
               children: [
-                lamp,
-                const SizedBox(width: 28),
-                Expanded(child: details),
+                content,
+                const SizedBox(height: 22),
+                Row(
+                  children: [
+                    const Text('Intensità'),
+                    const Spacer(),
+                    Text('${(_localLevel * 100).round()}%'),
+                  ],
+                ),
+                Slider(
+                  value: _localLevel,
+                  onChangeStart: (_) => setState(() => _dragging = true),
+                  onChanged: (value) {
+                    setState(() => _localLevel = value);
+                    ctrl.sendY(value);
+                  },
+                  onChangeEnd: (value) {
+                    ctrl.sendY(value);
+                    setState(() => _dragging = false);
+                  },
+                ),
+                Wrap(
+                  spacing: 7,
+                  runSpacing: 7,
+                  children: [
+                    for (final level in [0, 25, 50, 75, 100])
+                      FilledButton.tonal(
+                        onPressed: () {
+                          final value = level / 100;
+                          setState(() => _localLevel = value);
+                          ctrl.sendY(value);
+                        },
+                        child: Text(level == 0 ? 'Off' : '$level%'),
+                      ),
+                  ],
+                ),
               ],
             );
           },

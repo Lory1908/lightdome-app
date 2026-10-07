@@ -2,10 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../controllers/device_controller.dart';
 import 'tabs/dashboard_page.dart';
-import 'tabs/live_page.dart';
 import 'tabs/programs_page.dart';
 import 'tabs/settings_page.dart';
-import 'tabs/preview_page.dart';
+import 'tabs/create_page.dart';
 import '../core/services/app_settings.dart';
 
 class HomeScaffold extends StatefulWidget {
@@ -17,17 +16,12 @@ class HomeScaffold extends StatefulWidget {
 
 class _HomeScaffoldState extends State<HomeScaffold> {
   int _idx = 0;
-  bool _withPreviewPrev = true;
-
-  List<Widget> _buildPages(bool withPreview) => withPreview
-      ? const [
-          DashboardPage(),
-          PreviewPage(),
-          LivePage(),
-          ProgramsPage(),
-          SettingsPage(),
-        ]
-      : const [DashboardPage(), LivePage(), ProgramsPage(), SettingsPage()];
+  static const _pages = [
+    DashboardPage(),
+    CreatePage(),
+    ProgramsPage(),
+    SettingsPage(),
+  ];
 
   @override
   void initState() {
@@ -42,27 +36,8 @@ class _HomeScaffoldState extends State<HomeScaffold> {
     return AnimatedBuilder(
       animation: Listenable.merge([ctrl, settings]),
       builder: (context, _) {
-        final withPreview = settings.showPreview;
-        final pages = _buildPages(withPreview);
-        // Map index when the preview tab is toggled without changing page unexpectedly
-        var idx = _idx;
-        if (withPreview != _withPreviewPrev) {
-          if (!withPreview && _withPreviewPrev) {
-            // Removed preview: tabs at >=2 shift left by 1
-            if (idx >= 2) idx = idx - 1;
-          } else if (withPreview && !_withPreviewPrev) {
-            // Added preview: tabs at >=2 shift right by 1
-            if (idx >= 2) idx = idx + 1;
-          }
-          _withPreviewPrev = withPreview; // remember
-          // clamp to valid range
-          if (idx >= pages.length) idx = pages.length - 1;
-          if (idx < 0) idx = 0;
-          _idx = idx; // keep internal state consistent
-        }
-        // Extra safety clamp (handles manual changes)
-        if (idx >= pages.length) idx = pages.length - 1;
-        if (idx < 0) idx = 0;
+        final pages = _pages;
+        final idx = _idx.clamp(0, pages.length - 1);
         final scheme = Theme.of(context).colorScheme;
         return Scaffold(
           extendBody: true,
@@ -77,60 +52,60 @@ class _HomeScaffoldState extends State<HomeScaffold> {
                       constraints: const BoxConstraints(maxWidth: 1180),
                       child: Row(
                         children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: scheme.primary.withValues(alpha: 0.14),
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                        child: Icon(
-                          Icons.light_mode_rounded,
-                          color: scheme.primary,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'LightDome',
-                              style: Theme.of(context).textTheme.titleLarge,
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: scheme.primary.withValues(alpha: 0.14),
+                              borderRadius: BorderRadius.circular(15),
                             ),
-                            const SizedBox(height: 1),
-                            Text(
-                              ctrl.isConnected
-                                  ? 'Cupola pronta${ctrl.ip.isNotEmpty ? ' • ${ctrl.ip}' : ''}'
-                                  : 'In attesa di connessione',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(
-                                    color: ctrl.isConnected
-                                        ? scheme.secondary
-                                        : scheme.onSurfaceVariant,
-                                  ),
+                            child: Icon(
+                              Icons.light_mode_rounded,
+                              color: scheme.primary,
                             ),
-                          ],
-                        ),
-                      ),
-                      IconButton.filledTonal(
-                        tooltip: 'Cambia tema',
-                        onPressed: () {
-                          final brightness = Theme.of(context).brightness;
-                          settings.setThemePreference(
-                            brightness == Brightness.dark
-                                ? AppThemePreference.light
-                                : AppThemePreference.dark,
-                          );
-                        },
-                        icon: Icon(
-                          Theme.of(context).brightness == Brightness.dark
-                              ? Icons.light_mode_outlined
-                              : Icons.dark_mode_outlined,
-                        ),
-                      ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'LightDome',
+                                  style: Theme.of(context).textTheme.titleLarge,
+                                ),
+                                const SizedBox(height: 1),
+                                Text(
+                                  ctrl.isConnected
+                                      ? 'Cupola pronta${ctrl.ip.isNotEmpty ? ' • ${ctrl.ip}' : ''}'
+                                      : 'In attesa di connessione',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        color: ctrl.isConnected
+                                            ? scheme.secondary
+                                            : scheme.onSurfaceVariant,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton.filledTonal(
+                            tooltip: 'Cambia tema',
+                            onPressed: () {
+                              final brightness = Theme.of(context).brightness;
+                              settings.setThemePreference(
+                                brightness == Brightness.dark
+                                    ? AppThemePreference.light
+                                    : AppThemePreference.dark,
+                              );
+                            },
+                            icon: Icon(
+                              Theme.of(context).brightness == Brightness.dark
+                                  ? Icons.light_mode_outlined
+                                  : Icons.dark_mode_outlined,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -180,16 +155,10 @@ class _HomeScaffoldState extends State<HomeScaffold> {
                           selectedIcon: Icon(Icons.space_dashboard_rounded),
                           label: 'Home',
                         ),
-                        if (withPreview)
-                          const NavigationDestination(
-                            icon: Icon(Icons.blur_circular_outlined),
-                            selectedIcon: Icon(Icons.blur_circular_rounded),
-                            label: 'Cupola',
-                          ),
                         const NavigationDestination(
-                          icon: Icon(Icons.tune_outlined),
-                          selectedIcon: Icon(Icons.tune_rounded),
-                          label: 'Live',
+                          icon: Icon(Icons.auto_awesome_outlined),
+                          selectedIcon: Icon(Icons.auto_awesome_rounded),
+                          label: 'Crea',
                         ),
                         const NavigationDestination(
                           icon: Icon(Icons.queue_music_outlined),
@@ -199,7 +168,7 @@ class _HomeScaffoldState extends State<HomeScaffold> {
                         const NavigationDestination(
                           icon: Icon(Icons.settings_outlined),
                           selectedIcon: Icon(Icons.settings_rounded),
-                          label: 'Impostazioni',
+                          label: 'Altro',
                         ),
                       ],
                     ),

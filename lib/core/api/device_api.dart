@@ -30,7 +30,7 @@ class DeviceApi {
   Future<void> setY(double y01) async {
     // Prefer legacy GET /set for immediate response and compatibility
     final y1023 = (y01.clamp(0.0, 1.0) * 1023).round();
-    await getText(_u('/set?y=$y1023'));
+    await getText(_u('/set?y=$y1023&smooth=90'));
   }
 
   Future<void> off() async {
@@ -142,11 +142,7 @@ class DeviceApi {
   }) async {
     final qs =
         'name=${Uri.encodeComponent(name)}&sr=$sampleRateHz&autorun=${autorun ? 1 : 0}';
-    return postBytes(
-      _u('/prog/save?$qs'),
-      bytes,
-      headers: {'Content-Type': 'application/octet-stream'},
-    );
+    return postMultipartBytes(_u('/prog/save?$qs'), bytes);
   }
 
   Future<String> uploadProgramFile({
@@ -158,10 +154,9 @@ class DeviceApi {
   }) {
     final qs =
         'name=${Uri.encodeComponent(name)}&sr=0&autorun=${autorun ? 1 : 0}';
-    return postStream(
+    return postMultipartStream(
       _u('/prog/save?$qs'),
       data,
-      headers: const {'Content-Type': 'application/octet-stream'},
       contentLength: length,
       timeout: const Duration(seconds: 30),
       onProgress: onProgress,

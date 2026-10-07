@@ -3,60 +3,99 @@
 ## Evidence
 
 - Source visual truth:
-  - `C:\Users\loryc\AppData\Local\Temp\codex-clipboard-e1a58403-b1c3-4ba1-a5f5-23a0e17fe20b.png` (primary visual language)
-  - `C:\Users\loryc\AppData\Local\Temp\codex-clipboard-94b2a26d-63d4-43f6-b073-011ca9cff590.png` (secondary information-density reference)
-  - `C:\Users\loryc\AppData\Local\Temp\codex-clipboard-446c43e5-8410-42ba-ae7c-deb67aacaa9c.png` (functional lighting-control reference)
-- Rendered implementation:
-  - Flutter Web preview: `http://127.0.0.1:4181`
-  - ESP8266 control UI: `http://lightdome.local/`
-  - ESP8266 setup UI: `http://lightdome.local/wifi`
-  - Screenshots were captured and inspected in the Codex in-app browser during this build; the capture surface does not expose a file-backed screenshot path.
-- Viewports and density:
-  - Flutter mobile: 393 × 852 CSS px at device scale 1.
-  - Flutter desktop: 1787 × 1245 CSS px at device scale 1.
-  - Firmware pages: 1265 × 711 CSS px at device scale 1.
-  - The moodboard images are presentation boards rather than same-screen mocks, so comparison was normalized around component scale, hierarchy, palette, density, and interaction language rather than pixel-for-pixel geometry.
-- States checked: light theme, dark theme, disconnected device, dashboard, settings, firmware control, firmware setup, password visibility.
+  - `C:\Users\loryc\AppData\Local\Temp\codex-clipboard-e1a58403-b1c3-4ba1-a5f5-23a0e17fe20b.png`
+  - `C:\Users\loryc\AppData\Local\Temp\codex-clipboard-94b2a26d-63d4-43f6-b073-011ca9cff590.png`
+  - `C:\Users\loryc\AppData\Local\Temp\codex-clipboard-446c43e5-8410-42ba-ae7c-deb67aacaa9c.png`
+- Browser-rendered implementation: `http://192.168.1.171/` on the flashed ESP8266.
+- Implementation screenshots: captured in the Codex in-app browser during this
+  QA run. The capture surface returned rendered image evidence but no
+  file-backed screenshot path.
+- Viewports:
+  - desktop: 1787 × 1245 CSS px, device scale 1;
+  - mobile: 390 × 844 CSS px, device scale 1.
+- States compared: desktop dark Home, mobile dark Home, mobile dark Create,
+  mobile light Help/Advanced, empty library, running stored pattern, manual
+  brightness control.
+- Density normalization: the references are presentation moodboards rather
+  than a single production screen, so evaluation uses matched component scale,
+  hierarchy, palette and interaction density instead of pixel-for-pixel frame
+  geometry.
 
 ## Required fidelity surfaces
 
-- Fonts and typography: passed. System UI fonts preserve offline operation and closely match the compact grotesk hierarchy in the references. Display, title, label, and supporting-text weights are distinct and remain readable in both themes.
-- Spacing and layout rhythm: passed. The implementation uses a consistent 12–24 px rhythm, 16–26 px radii, integrated cards, restrained borders, and compact navigation. Mobile and desktop layouts do not overflow.
-- Colors and visual tokens: passed. Dark graphite and warm ivory bases, warm light accent, cool connection accent, muted outlines, and semantic error colors remain legible in both themes.
-- Image quality and asset fidelity: passed for the adapted product scope. The references are moodboards containing product photography and RGB controls; LightDome is a mono fixture, so those assets were intentionally not copied. Material icons and native controls are used instead of approximate raster or handmade icon assets.
-- Copy and content: passed. Labels are concise Italian product copy, setup steps are explicit, and credential handling is explained without exposing secrets.
+- Fonts and typography: passed. Offline system fonts preserve the reference's
+  compact grotesk hierarchy. Headings, numeric output, labels and helper copy
+  have visibly distinct weights and remain readable in both themes.
+- Spacing and layout rhythm: passed. The 12–26 px spacing/radius system creates
+  integrated panels and a floating bottom navigation. Desktop uses a focused
+  two-column control surface; mobile collapses cleanly without horizontal
+  overflow.
+- Colors and visual tokens: passed. Graphite surfaces, warm light accents,
+  restrained borders and cool connection status match the reference language.
+  The light theme preserves the same hierarchy rather than falling back to a
+  generic white form.
+- Image quality and asset fidelity: passed for the mono-light product. The
+  reference photography and RGB wheel are moodboard material, not LightDome
+  assets. No low-quality placeholder imagery was introduced.
+- Copy and content: passed. Daily actions use plain Italian; autonomy and audio
+  limitations are explained where decisions are made. Technical status is
+  hidden under the Advanced/Diagnostics layer.
 
 ## Full-view comparison
 
-The revised surfaces match the selected references in their key design traits: dark integrated surfaces, strong but sparse light accents, large primary controls, compact secondary data, low-noise borders, and a floating mobile navigation treatment. The light theme preserves the same hierarchy instead of becoming a plain white Material layout.
+The implementation carries the selected visual direction into a practical
+embedded UI: large primary light control, integrated status card, low-noise
+surfaces, clear selected states and compact persistent navigation. It is less
+ornamental than the marketing references by design, keeping the ESP8266 page
+fast and legible while retaining the same premium dark-surface character.
 
 ## Focused-region comparison
 
-- Dashboard hero: lamp state, connection state, output percentage, and primary actions form one integrated control region, matching the references' device-card hierarchy.
-- Setup network form: progress steps, selectable network rows, signal/security metadata, password visibility, and status feedback are grouped into one focused card.
-- Theme controls: both app and firmware pages switch between independently designed light and dark token sets.
+- Home: large output percentage, centered dome state, full-width slider and
+  quick levels form one coherent control surface.
+- Create: preset cards, labeled controls and the live curve preview keep the
+  complex pattern model understandable on a 390 px viewport.
+- Help/Advanced: first-use guidance is visible before technical controls;
+  diagnostics remain available without dominating everyday use.
+- Navigation: Home, Create, Pattern and More remain reachable at all tested
+  heights with clear selected-state treatment.
+
+## Interaction verification
+
+- Theme switching passed in light and dark modes.
+- Manual 50% and Off commands passed against the real device.
+- Pattern generation, multipart upload, validation, start and library refresh
+  passed against LittleFS.
+- Autonomous playback passed: frame position advanced while the interface was
+  no longer involved (`227` to `323` during the check).
+- Firmware smoothing passed with monotonic intermediate output samples before
+  reaching the requested target.
+- Test pattern cleanup passed; the final device state is stopped and off.
+- No new console error was observed after the final firmware reload.
 
 ## Comparison history
 
-1. First implementation pass:
-   - P2: desktop app header did not align with the centered content column.
-   - P2: setup step separators rendered with mojibake because the firmware page omitted an explicit UTF-8 charset.
-   - P3: the technical pattern placeholder displayed literal newline escapes.
-2. Fixes:
-   - Constrained the app header to the same 1180 px content width.
-   - Added UTF-8 metadata to both firmware pages.
-   - Replaced the placeholder escapes with HTML line breaks.
-3. Post-fix evidence:
-   - Rebuilt and recaptured app mobile light/dark views.
-   - Flashed the firmware, reloaded both device pages, verified the corrected setup labels, theme switching, password visibility, and empty browser error logs.
+1. First pass found a P1 blank page: the 23 KB UI was copied into scarce heap
+   memory. Fixed by streaming the page directly from flash with `send_P`.
+2. Second pass found a P1 pattern-save failure: the legacy raw upload path did
+   not trigger ESP8266 upload callbacks. Fixed with multipart upload in web,
+   Flutter IO and Flutter web clients plus atomic temporary-file promotion.
+3. Mobile review found no actionable overflow or obscured primary action. The
+   bottom navigation intentionally overlays the safe-area edge and content has
+   matching bottom padding.
+4. Post-fix desktop and mobile captures verified the final Home, Create,
+   Library and Help states on the physical controller.
 
 ## Findings
 
-No actionable P0, P1, or P2 findings remain.
+No actionable P0, P1 or P2 findings remain.
 
 ## Follow-up polish
 
-- P3: the populated Wi-Fi network-row appearance was not recaptured after the visual redesign because `/wifi/scan` is intentionally restricted to clients on `LightDome-Setup`. The same endpoint and selection logic were previously hardware-tested; the unpopulated form and all other visible states were verified after flashing.
+- P3: audio-system capture is represented in the architecture but still needs
+  platform-specific implementation and latency testing.
+- P3: the AI Pattern Kit is documented as an extension point but is not yet an
+  in-product cloud dependency.
 
 ## Final result
 
