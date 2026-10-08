@@ -150,35 +150,3 @@ verificare in modo trasparente ciò che era in riproduzione.
 La funzione è implementata e verificata staticamente/unitariamente. Non viene
 dichiarata collaudata end-to-end finché non saranno completate la build Windows
 integrale e la prova manuale con audio e cupola reali.
-
-## Addendum revisione primaria
-
-Commit correttivo: `45a4c96`.
-
-La prima implementazione consegnava `EventSink::Success/Error` direttamente dal
-thread WASAPI. Il wrapper `BinaryMessengerImpl::Send` non aggiunge il lock
-richiesto dal contratto del messenger Windows per le chiamate fuori dal platform
-thread. La revisione ha quindi sostituito quel percorso:
-
-- il capture thread crea soltanto dati C++ e usa `PostMessage` verso la finestra
-  principale;
-- `FlutterWindow::MessageHandler`, sul platform thread, consegna frame ed errori
-  all'`EventSink`;
-- durante lo shutdown il plugin blocca nuovi post, unisce il capture thread e
-  libera gli eventi Win32 ancora in coda prima di distruggere i channel;
-- nessuna chiamata al messenger viene più eseguita dal capture thread.
-
-Sono state inoltre applicate due correzioni applicative:
-
-- `AudioFoundationPanel` ascolta direttamente `DeviceController` con un
-  `AnimatedBuilder`, quindi il pulsante segue lo stato di connessione anche se
-  il widget figlio const non viene ricreato dal parent;
-- prima di ogni start, l'app invia sempre al firmware il fallback mostrato in
-  UI, incluso `null`, eliminando configurazioni RAM residue di sessioni
-  precedenti.
-
-È stato aggiunto `test/audio_foundation_panel_test.dart`, che verifica la
-transizione disabilitato/abilitato del pulsante quando cambia `isConnected`.
-Dopo le correzioni: analisi pulita, **28 test superati**, compilazione separata
-con MSVC `/W4 /WX` riuscita sia per `wasapi_loopback.cpp` sia per
-`flutter_window.cpp`. Le build Web e APK sono state ripetute con successo.
