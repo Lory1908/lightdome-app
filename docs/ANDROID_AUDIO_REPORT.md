@@ -5,6 +5,7 @@ Branch: `agent/pre-home-work`
 Starting commit: `0563998`  
 Implementation commit: `8e2940e`
 Lifecycle hardening commit: `6739f79`
+Flutter-engine reattach commit: `6cf85c8`
 
 ## Scope and result
 
@@ -100,7 +101,7 @@ SDK APIs already available to the project.
 ## Automated verification
 
 - `flutter analyze`: passed, zero issues.
-- `flutter test`: passed, 33 tests.
+- `flutter test`: passed, 34 tests.
 - PCM decoder tests: valid extrema, malformed length and invalid sample rate.
 - Android source lifecycle test: availability, start, transient frame and stop.
 - Availability widget test: non-Android UI exposes no start control.
@@ -138,6 +139,10 @@ PowerShell with the call operator, for example
   cancellation from an old engine cannot clear the sink attached by a newer
   engine. A newly attached engine immediately receives the current native
   capture status; PCM remains transient and is dropped while no sink exists.
+- Availability now attaches the Dart side to the EventChannel immediately. If
+  Android recreates the Flutter engine while the foreground service remains
+  active, the UI reports that state and can resume processing without asking
+  for a second MediaProjection consent.
 - If a live Dart EventChannel ends, the source raises an audio loss so the
   coordinator stops and the firmware watchdog can take over.
 
@@ -174,6 +179,6 @@ PowerShell with the call operator, for example
 
 Before integration, the safest rollback is to keep using commit `0563998` or
 delete the separate branch. After integration, revert implementation commit
-`8e2940e`, lifecycle hardening commit `6739f79`, and their documentation commits
-together. No data migration or firmware rollback is required because no
-persistent format was changed.
+`8e2940e`, lifecycle hardening commit `6739f79`, reattach commit `6cf85c8`, and
+their documentation commits together. No data migration or firmware rollback
+is required because no persistent format was changed.
