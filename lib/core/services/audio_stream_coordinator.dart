@@ -3,8 +3,8 @@ import 'dart:async';
 import 'audio_capture_source.dart';
 import 'audio_feature_processor.dart';
 
-/// Transport-agnostic audio session. A future WASAPI adapter can use
-/// DeviceApi.sendAudioY, configureAudioFallback and stopAudio directly.
+/// Transport-agnostic audio session. Android playback capture supplies PCM;
+/// this coordinator coalesces the resulting levels so HTTP writes never overlap.
 class AudioStreamCoordinator {
   AudioStreamCoordinator({
     required this.source,

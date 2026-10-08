@@ -269,6 +269,20 @@ class DeviceController extends ChangeNotifier {
     await api.configureAudioFallback(name);
   }
 
+  Future<void> sendAudioLevel(double level) async {
+    final api = _api;
+    if (api == null) throw StateError('Cupola non connessa');
+    SignalMonitor.I.pushTx(level);
+    await api.sendAudioY(level);
+  }
+
+  Future<void> stopAudioStream() async {
+    final api = _api;
+    if (api == null) return;
+    await api.stopAudio();
+    await refreshOnce();
+  }
+
   Future<PatternDraft?> loadProgramDraft(String name) async {
     final api = _api;
     if (api == null) throw StateError('Cupola non connessa');

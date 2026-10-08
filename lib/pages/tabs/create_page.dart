@@ -382,9 +382,9 @@ class _CreatePageState extends State<CreatePage> {
             leading: const Icon(Icons.graphic_eq_rounded),
             title: const Text('Audio reattivo'),
             subtitle: const Text(
-              'Microfono e audio di sistema useranno bassi, medi, alti, soglia, attack e release. La sorgente deve restare attiva.',
+              'Nell’app Android, apri Programmi per far reagire la cupola all’audio riprodotto sul telefono.',
             ),
-            trailing: const Chip(label: Text('Prossimo passo')),
+            trailing: const Chip(label: Text('Android 10+')),
           ),
         ),
       ],
