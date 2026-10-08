@@ -64,7 +64,14 @@ flutter:
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.
-  uses-material-design: true
+  # Use a versioned, bundled copy so browser caches cannot pair a new app with
+  # an older tree-shaken icon font (which renders every icon as an empty box).
+  uses-material-design: false
+
+  fonts:
+    - family: MaterialIcons
+      fonts:
+        - asset: assets/fonts/material-icons-v1.otf
 
   # To add assets to your application, add an assets section, like this:
   # assets:

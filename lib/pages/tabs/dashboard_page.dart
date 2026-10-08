@@ -116,34 +116,70 @@ class _DashboardPageState extends State<DashboardPage> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final compact = constraints.maxWidth < 520;
-            final lamp = Container(
-              width: compact ? 118 : 152,
-              height: compact ? 118 : 152,
+            final lampSize = compact ? 166.0 : 198.0;
+            final lamp = AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              width: lampSize,
+              height: lampSize,
               decoration: BoxDecoration(
                 color: state.on
-                    ? scheme.primary.withValues(alpha: 0.16 + state.y * 0.18)
+                    ? scheme.primary.withValues(alpha: 0.24 + state.y * 0.26)
                     : scheme.surfaceContainerHigh,
                 shape: BoxShape.circle,
                 border: Border.all(
                   color: state.on ? scheme.primary : scheme.outlineVariant,
-                  width: 1.5,
+                  width: 2,
                 ),
                 boxShadow: state.on
                     ? [
                         BoxShadow(
                           color: scheme.primary.withValues(
-                            alpha: 0.2 + state.y * 0.2,
+                            alpha: 0.30 + state.y * 0.24,
                           ),
-                          blurRadius: 36,
-                          spreadRadius: 2,
+                          blurRadius: 54,
+                          spreadRadius: 7,
                         ),
                       ]
-                    : const [],
+                    : [
+                        BoxShadow(
+                          color: scheme.shadow.withValues(alpha: 0.08),
+                          blurRadius: 18,
+                          spreadRadius: 3,
+                        ),
+                      ],
               ),
-              child: Icon(
-                state.on ? Icons.light_mode_rounded : Icons.light_mode_outlined,
-                size: compact ? 54 : 68,
-                color: state.on ? scheme.primary : scheme.onSurfaceVariant,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    state.on
+                        ? Icons.light_mode_rounded
+                        : Icons.light_mode_outlined,
+                    size: compact ? 48 : 58,
+                    color: state.on ? scheme.primary : scheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    '$level%',
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      color: state.on
+                          ? scheme.primary
+                          : scheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  Text(
+                    state.on ? 'ANTEPRIMA' : 'SPENTA',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: state.on
+                          ? scheme.primary
+                          : scheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ],
               ),
             );
             final details = Column(
