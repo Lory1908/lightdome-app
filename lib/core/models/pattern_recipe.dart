@@ -13,7 +13,7 @@ class PatternRecipe {
     required this.duty,
     required this.easing,
     required this.randomness,
-    this.sampleRateHz = 100,
+    this.sampleRateHz = 150,
   });
 
   final PatternRecipeType type;

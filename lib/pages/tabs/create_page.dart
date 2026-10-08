@@ -238,13 +238,21 @@ class _CreatePageState extends State<CreatePage> {
                   ),
                 if (_type == PatternRecipeType.organic)
                   _slider(
-                    'Casualità',
+                    'Irregolarità',
                     '${(_randomness * 100).round()}%',
                     _randomness,
                     0,
                     1,
                     (value) => setState(() => _randomness = value),
                   ),
+                Text(
+                  _type == PatternRecipeType.organic
+                      ? 'Indica quanto il movimento varia invece di ripetersi sempre uguale.'
+                      : 'Qualità alta · 150 aggiornamenti al secondo, scelta automaticamente.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
                 const SizedBox(height: 4),
                 DropdownButtonFormField<PatternEasing>(
                   initialValue: _easing,

@@ -36,4 +36,19 @@ void main() {
       expect(samples[i], greaterThanOrEqualTo(samples[i - 1]));
     }
   });
+
+  test('editor defaults to the highest supported quality', () {
+    const recipe = PatternRecipe(
+      type: PatternRecipeType.breath,
+      durationSeconds: 1,
+      minimum: 0,
+      maximum: 1,
+      duty: .5,
+      easing: PatternEasing.smooth,
+      randomness: 0,
+    );
+
+    expect(recipe.sampleRateHz, 150);
+    expect(recipe.render(), hasLength(150));
+  });
 }
