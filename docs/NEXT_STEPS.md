@@ -9,17 +9,22 @@
 
 ## Work that does not require the lamp
 
-1. Bring saved-pattern editing to feature parity in Flutter: load the stored
-   recipe metadata, edit it and replace the existing program.
-2. Test Android 10+ playback capture on a real phone with multiple capturable
+The software-only preparation currently planned is complete: Flutter can edit
+and atomically replace saved recipe-based patterns, the local LLM authoring kit
+contains a schema, prompt, examples, validation and preview, Android playback
+capture is wired to the firmware watchdog, and the Web build includes the
+mobile/PWA metadata needed for adding it to an iPhone Home Screen.
+
+The remaining work needs either a real device or release credentials:
+
+1. Test Android 10+ playback capture on a real phone with multiple capturable
    apps and verify volume, bass, mid, treble and beat response on the lamp.
-3. Verify the audio watchdog on real hardware: fade out or start the selected
+2. Verify the audio watchdog on real hardware: fade out or start the selected
    local fallback after permission revocation, app closure and network loss.
-4. Prepare the user-facing authoring package for an LLM: documented recipe
-   schema, examples, validation and preview before upload.
-5. Prepare distribution: signed Android release and an iPhone-friendly web
-   experience that can be added to the Home Screen.
-6. Harden maintenance and recovery: authenticated OTA update, progress,
+3. Test installation from Safari and normal controls on an iPhone. Audio
+   capture intentionally remains Android-only.
+4. Create the final Android application id, signing key and signed release.
+5. Harden maintenance and recovery: authenticated OTA update, progress,
    automatic reconnect and clear fallback when mDNS is unavailable.
 
 Audio capture is Android-only for now. Web, iOS and desktop are intentionally
