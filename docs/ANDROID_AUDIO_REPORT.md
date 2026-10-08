@@ -4,6 +4,7 @@ Date: 2026-10-08
 Branch: `agent/pre-home-work`  
 Starting commit: `0563998`  
 Implementation commit: `8e2940e`
+Lifecycle hardening commit: `6739f79`
 
 ## Scope and result
 
@@ -99,10 +100,12 @@ SDK APIs already available to the project.
 ## Automated verification
 
 - `flutter analyze`: passed, zero issues.
-- `flutter test`: passed, 30 tests.
+- `flutter test`: passed, 33 tests.
 - PCM decoder tests: valid extrema, malformed length and invalid sample rate.
 - Android source lifecycle test: availability, start, transient frame and stop.
 - Availability widget test: non-Android UI exposes no start control.
+- Lifecycle tests: initial stopped state, projection revocation, EventChannel
+  loss, source completion and platform-stop failure all clean up once.
 - `flutter build apk --debug`: passed.
 - `flutter build apk --release`: passed; output
   `build/app/outputs/flutter-apk/app-release.apk` (48.1 MB).
@@ -115,6 +118,28 @@ it is suitable for private testing, not store distribution. During release
 compilation the Kotlin daemon reported its known cross-drive incremental-cache
 warning (`C:` Pub cache versus `J:` repository), then Gradle's fallback compiler
 completed successfully.
+
+The second-pass build used:
+`C:\Users\loryc\.vscode\flutter\bin\flutter.bat`. Commands were invoked from
+PowerShell with the call operator, for example
+`& 'C:\Users\loryc\.vscode\flutter\bin\flutter.bat' test`.
+
+## Lifecycle review fixes
+
+- Native stop now marks capture as stopping, calls `AudioRecord.stop()` to
+  unblock the read, waits up to one second for a different worker thread, and
+  only then releases the recorder. The capture loop rechecks the stop flag
+  before publishing a final chunk. A worker handling its own read error never
+  attempts to join itself.
+- Coordinator cleanup tolerates an already-detached platform channel and calls
+  one completion callback. The Android session then discards its coordinator
+  and stale feature values after normal or unexpected loss.
+- Each Flutter engine receives an owner-scoped EventChannel handler. A late
+  cancellation from an old engine cannot clear the sink attached by a newer
+  engine. A newly attached engine immediately receives the current native
+  capture status; PCM remains transient and is dropped while no sink exists.
+- If a live Dart EventChannel ends, the source raises an audio loss so the
+  coordinator stops and the firmware watchdog can take over.
 
 ## Risks still requiring a real phone
 
@@ -149,5 +174,6 @@ completed successfully.
 
 Before integration, the safest rollback is to keep using commit `0563998` or
 delete the separate branch. After integration, revert implementation commit
-`8e2940e` and the following documentation commit together. No data migration or
-firmware rollback is required because no persistent format was changed.
+`8e2940e`, lifecycle hardening commit `6739f79`, and their documentation commits
+together. No data migration or firmware rollback is required because no
+persistent format was changed.
