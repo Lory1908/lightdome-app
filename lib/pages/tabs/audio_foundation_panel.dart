@@ -10,7 +10,9 @@ import '../../controllers/device_controller.dart';
 
 /// System-audio controls. The platform source stays unavailable outside Windows.
 class AudioFoundationPanel extends StatefulWidget {
-  const AudioFoundationPanel({super.key});
+  const AudioFoundationPanel({super.key, this.source});
+
+  final AudioCaptureSource? source;
 
   @override
   State<AudioFoundationPanel> createState() => _AudioFoundationPanelState();
@@ -36,7 +38,7 @@ class _AudioFoundationPanelState extends State<AudioFoundationPanel> {
   @override
   void initState() {
     super.initState();
-    source = createSystemAudioSource();
+    source = widget.source ?? createSystemAudioSource();
     patterns = DeviceController.I.listPrograms();
   }
 
@@ -106,6 +108,9 @@ class _AudioFoundationPanelState extends State<AudioFoundationPanel> {
     );
     session = next;
     try {
+      // Firmware fallback is RAM-only. Always synchronize the visible choice
+      // before arming audio so a previous session cannot remain active.
+      await DeviceController.I.setAudioFallback(fallback);
       await next.start();
       if (mounted) {
         setState(() {
@@ -170,187 +175,194 @@ class _AudioFoundationPanelState extends State<AudioFoundationPanel> {
     final active = session?.running == true;
     final currentFeatures = features;
     final scheme = Theme.of(context).colorScheme;
-    return Card(
-      child: ExpansionTile(
-        leading: const Icon(Icons.computer_rounded),
-        title: const Text('Audio del computer'),
-        subtitle: const Text('Luce reattiva all’audio riprodotto da Windows'),
-        childrenPadding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-        children: [
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text('Sorgente: ${source.label}'),
-            subtitle: Text(source.explanation),
-            trailing: Chip(
-              label: Text(
-                active
-                    ? 'In uso'
-                    : (source.isSupported ? 'Disponibile' : 'Non disponibile'),
-              ),
-            ),
-          ),
-          Text(
-            active
-                ? 'Trasmissione attiva verso la cupola.'
-                : 'Trasmissione ferma · Nessun audio acquisito.',
-          ),
-          if (streamMessage != null) Text(streamMessage!),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            children: [
-              Chip(label: Text('Volume ${_meter(currentFeatures?.volume)}')),
-              Chip(label: Text('Bassi ${_meter(currentFeatures?.bass)}')),
-              Chip(label: Text('Medi ${_meter(currentFeatures?.mid)}')),
-              Chip(label: Text('Alti ${_meter(currentFeatures?.treble)}')),
-              Chip(
+    return AnimatedBuilder(
+      animation: DeviceController.I,
+      builder: (context, _) => Card(
+        child: ExpansionTile(
+          leading: const Icon(Icons.computer_rounded),
+          title: const Text('Audio del computer'),
+          subtitle: const Text('Luce reattiva all’audio riprodotto da Windows'),
+          childrenPadding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+          children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text('Sorgente: ${source.label}'),
+              subtitle: Text(source.explanation),
+              trailing: Chip(
                 label: Text(
-                  currentFeatures == null
-                      ? 'Battito —'
-                      : (currentFeatures.beat ? 'Battito ●' : 'Battito ○'),
+                  active
+                      ? 'In uso'
+                      : (source.isSupported
+                            ? 'Disponibile'
+                            : 'Non disponibile'),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          _slider(
-            'Sensibilità',
-            gain,
-            0,
-            3,
-            (v) => updateTuning(() => gain = v),
-          ),
-          _slider(
-            'Soglia rumore',
-            gate,
-            0,
-            .5,
-            (v) => updateTuning(() => gate = v),
-          ),
-          _slider(
-            'Reazione in salita',
-            attack,
-            0,
-            1,
-            (v) => updateTuning(() => attack = v),
-          ),
-          _slider(
-            'Ritorno alla calma',
-            release,
-            0,
-            1,
-            (v) => updateTuning(() => release = v),
-          ),
-          _slider(
-            'Luce minima',
-            min,
-            0,
-            .9,
-            (v) => updateTuning(() => min = v.clamp(0, max)),
-          ),
-          _slider(
-            'Luce massima',
-            max,
-            .1,
-            1,
-            (v) => updateTuning(() => max = v.clamp(min, 1)),
-          ),
-          const Align(
-            alignment: Alignment.centerLeft,
-            child: Text('Risposta alle frequenze'),
-          ),
-          _slider(
-            'Influenza volume',
-            volumeWeight,
-            0,
-            1,
-            (v) => updateTuning(() => volumeWeight = v),
-          ),
-          _slider(
-            'Influenza bassi',
-            bassWeight,
-            0,
-            1,
-            (v) => updateTuning(() => bassWeight = v),
-          ),
-          _slider(
-            'Influenza medi',
-            midWeight,
-            0,
-            1,
-            (v) => updateTuning(() => midWeight = v),
-          ),
-          _slider(
-            'Influenza alti',
-            trebleWeight,
-            0,
-            1,
-            (v) => updateTuning(() => trebleWeight = v),
-          ),
-          _slider(
-            'Spinta sul battito',
-            beatBoost,
-            0,
-            1,
-            (v) => updateTuning(() => beatBoost = v),
-          ),
-          Text(
-            'In assenza di audio: dissolvenza, oppure pattern di riserva selezionato. La protezione sarà eseguita dal firmware.',
-            style: TextStyle(color: scheme.onSurfaceVariant),
-          ),
-          FutureBuilder<List<String>>(
-            future: patterns,
-            builder: (context, snapshot) {
-              final names = snapshot.data ?? const <String>[];
-              return DropdownButtonFormField<String>(
-                key: ValueKey(fallback),
-                initialValue: fallback ?? '',
-                decoration: const InputDecoration(
-                  labelText: 'Quando l’audio si interrompe',
-                ),
-                items: [
-                  const DropdownMenuItem(
-                    value: '',
-                    child: Text('Spegni gradualmente'),
-                  ),
-                  ...names.map(
-                    (name) => DropdownMenuItem(
-                      value: name,
-                      child: Text('Avvia $name'),
-                    ),
-                  ),
-                ],
-                onChanged: savingFallback
-                    ? null
-                    : (choice) => selectFallback(choice == '' ? null : choice),
-              );
-            },
-          ),
-          if (fallbackMessage != null) Text(fallbackMessage!),
-          const SizedBox(height: 8),
-          Text(
-            'Parametri attivi: gain ${tuning.gain.toStringAsFixed(2)}, gate ${tuning.gate.toStringAsFixed(2)}, risposta V/B/M/A ${tuning.volumeWeight.toStringAsFixed(2)}/${tuning.bassWeight.toStringAsFixed(2)}/${tuning.midWeight.toStringAsFixed(2)}/${tuning.trebleWeight.toStringAsFixed(2)}.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 6),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed:
-                  source.isSupported &&
-                      DeviceController.I.isConnected &&
-                      !starting
-                  ? toggleAudio
-                  : null,
-              child: Text(
-                starting
-                    ? 'Attendi…'
-                    : (active ? 'Ferma audio' : 'Avvia audio del computer'),
               ),
             ),
-          ),
-        ],
+            Text(
+              active
+                  ? 'Trasmissione attiva verso la cupola.'
+                  : 'Trasmissione ferma · Nessun audio acquisito.',
+            ),
+            if (streamMessage != null) Text(streamMessage!),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                Chip(label: Text('Volume ${_meter(currentFeatures?.volume)}')),
+                Chip(label: Text('Bassi ${_meter(currentFeatures?.bass)}')),
+                Chip(label: Text('Medi ${_meter(currentFeatures?.mid)}')),
+                Chip(label: Text('Alti ${_meter(currentFeatures?.treble)}')),
+                Chip(
+                  label: Text(
+                    currentFeatures == null
+                        ? 'Battito —'
+                        : (currentFeatures.beat ? 'Battito ●' : 'Battito ○'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            _slider(
+              'Sensibilità',
+              gain,
+              0,
+              3,
+              (v) => updateTuning(() => gain = v),
+            ),
+            _slider(
+              'Soglia rumore',
+              gate,
+              0,
+              .5,
+              (v) => updateTuning(() => gate = v),
+            ),
+            _slider(
+              'Reazione in salita',
+              attack,
+              0,
+              1,
+              (v) => updateTuning(() => attack = v),
+            ),
+            _slider(
+              'Ritorno alla calma',
+              release,
+              0,
+              1,
+              (v) => updateTuning(() => release = v),
+            ),
+            _slider(
+              'Luce minima',
+              min,
+              0,
+              .9,
+              (v) => updateTuning(() => min = v.clamp(0, max)),
+            ),
+            _slider(
+              'Luce massima',
+              max,
+              .1,
+              1,
+              (v) => updateTuning(() => max = v.clamp(min, 1)),
+            ),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text('Risposta alle frequenze'),
+            ),
+            _slider(
+              'Influenza volume',
+              volumeWeight,
+              0,
+              1,
+              (v) => updateTuning(() => volumeWeight = v),
+            ),
+            _slider(
+              'Influenza bassi',
+              bassWeight,
+              0,
+              1,
+              (v) => updateTuning(() => bassWeight = v),
+            ),
+            _slider(
+              'Influenza medi',
+              midWeight,
+              0,
+              1,
+              (v) => updateTuning(() => midWeight = v),
+            ),
+            _slider(
+              'Influenza alti',
+              trebleWeight,
+              0,
+              1,
+              (v) => updateTuning(() => trebleWeight = v),
+            ),
+            _slider(
+              'Spinta sul battito',
+              beatBoost,
+              0,
+              1,
+              (v) => updateTuning(() => beatBoost = v),
+            ),
+            Text(
+              'In assenza di audio: dissolvenza, oppure pattern di riserva selezionato. La protezione sarà eseguita dal firmware.',
+              style: TextStyle(color: scheme.onSurfaceVariant),
+            ),
+            FutureBuilder<List<String>>(
+              future: patterns,
+              builder: (context, snapshot) {
+                final names = snapshot.data ?? const <String>[];
+                return DropdownButtonFormField<String>(
+                  key: ValueKey(fallback),
+                  initialValue: fallback ?? '',
+                  decoration: const InputDecoration(
+                    labelText: 'Quando l’audio si interrompe',
+                  ),
+                  items: [
+                    const DropdownMenuItem(
+                      value: '',
+                      child: Text('Spegni gradualmente'),
+                    ),
+                    ...names.map(
+                      (name) => DropdownMenuItem(
+                        value: name,
+                        child: Text('Avvia $name'),
+                      ),
+                    ),
+                  ],
+                  onChanged: savingFallback
+                      ? null
+                      : (choice) =>
+                            selectFallback(choice == '' ? null : choice),
+                );
+              },
+            ),
+            if (fallbackMessage != null) Text(fallbackMessage!),
+            const SizedBox(height: 8),
+            Text(
+              'Parametri attivi: gain ${tuning.gain.toStringAsFixed(2)}, gate ${tuning.gate.toStringAsFixed(2)}, risposta V/B/M/A ${tuning.volumeWeight.toStringAsFixed(2)}/${tuning.bassWeight.toStringAsFixed(2)}/${tuning.midWeight.toStringAsFixed(2)}/${tuning.trebleWeight.toStringAsFixed(2)}.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 6),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                key: const Key('system-audio-toggle'),
+                onPressed:
+                    source.isSupported &&
+                        DeviceController.I.isConnected &&
+                        !starting
+                    ? toggleAudio
+                    : null,
+                child: Text(
+                  starting
+                      ? 'Attendi…'
+                      : (active ? 'Ferma audio' : 'Avvia audio del computer'),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

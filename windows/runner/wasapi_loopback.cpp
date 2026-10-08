@@ -28,6 +28,15 @@ using Value = flutter::EncodableValue;
 using Sink = flutter::EventSink<Value>;
 
 constexpr size_t kFrameSamples = 1024;
+constexpr UINT kDispatchMessage = WM_APP + 0x4D;
+
+struct PlatformEvent {
+  enum class Kind { kFrame, kError };
+  Kind kind;
+  UINT32 sample_rate = 0;
+  std::vector<double> samples;
+  std::string error;
+};
 
 std::string HResultMessage(HRESULT result) {
   char buffer[32];
@@ -111,13 +120,14 @@ double DecodePcmSample(const BYTE* data, const CaptureFormat& format) {
 
 class WasapiLoopbackPlugin::Impl {
  public:
-  explicit Impl(flutter::BinaryMessenger* messenger)
+  Impl(flutter::BinaryMessenger* messenger, HWND window)
       : method_channel_(std::make_unique<flutter::MethodChannel<Value>>(
             messenger, "lightdome/windows_audio_commands",
             &flutter::StandardMethodCodec::GetInstance())),
         event_channel_(std::make_unique<flutter::EventChannel<Value>>(
             messenger, "lightdome/windows_audio_frames",
-            &flutter::StandardMethodCodec::GetInstance())) {
+            &flutter::StandardMethodCodec::GetInstance())),
+        window_(window) {
     method_channel_->SetMethodCallHandler(
         [this](const flutter::MethodCall<Value>& call,
                std::unique_ptr<flutter::MethodResult<Value>> result) {
@@ -139,23 +149,42 @@ class WasapiLoopbackPlugin::Impl {
         std::make_unique<flutter::StreamHandlerFunctions<Value>>(
             [this](const Value*, std::unique_ptr<Sink>&& sink)
                 -> std::unique_ptr<flutter::StreamHandlerError<Value>> {
-              std::lock_guard<std::mutex> lock(sink_mutex_);
               sink_ = std::move(sink);
               return nullptr;
             },
             [this](const Value*)
                 -> std::unique_ptr<flutter::StreamHandlerError<Value>> {
               Stop();
-              std::lock_guard<std::mutex> lock(sink_mutex_);
               sink_.reset();
               return nullptr;
             }));
   }
 
   ~Impl() {
+    shutting_down_.store(true);
     Stop();
+    DrainPostedEvents();
     method_channel_->SetMethodCallHandler(nullptr);
     event_channel_->SetStreamHandler(nullptr);
+  }
+
+  bool HandleWindowMessage(UINT message, LPARAM lparam, LRESULT* result) {
+    if (message != kDispatchMessage) return false;
+    std::unique_ptr<PlatformEvent> event(
+        reinterpret_cast<PlatformEvent*>(lparam));
+    if (event && !shutting_down_.load() && sink_) {
+      if (event->kind == PlatformEvent::Kind::kFrame) {
+        flutter::EncodableMap value;
+        value[Value("sampleRateHz")] =
+            Value(static_cast<int32_t>(event->sample_rate));
+        value[Value("samples")] = Value(std::move(event->samples));
+        sink_->Success(Value(std::move(value)));
+      } else {
+        sink_->Error("wasapi_capture_failed", event->error);
+      }
+    }
+    if (result) *result = 0;
+    return true;
   }
 
  private:
@@ -218,17 +247,37 @@ class WasapiLoopbackPlugin::Impl {
     state_cv_.notify_all();
   }
 
-  void EmitFrame(const std::vector<double>& samples, UINT32 sample_rate) {
-    flutter::EncodableMap message;
-    message[Value("sampleRateHz")] = Value(static_cast<int32_t>(sample_rate));
-    message[Value("samples")] = Value(samples);
-    std::lock_guard<std::mutex> lock(sink_mutex_);
-    if (sink_) sink_->Success(Value(std::move(message)));
+  void PostFrame(const std::vector<double>& samples, UINT32 sample_rate) {
+    auto event = std::make_unique<PlatformEvent>();
+    event->kind = PlatformEvent::Kind::kFrame;
+    event->sample_rate = sample_rate;
+    event->samples = samples;
+    PostEvent(std::move(event));
   }
 
-  void EmitError(const std::string& message) {
-    std::lock_guard<std::mutex> lock(sink_mutex_);
-    if (sink_) sink_->Error("wasapi_capture_failed", message);
+  void PostError(const std::string& message) {
+    auto event = std::make_unique<PlatformEvent>();
+    event->kind = PlatformEvent::Kind::kError;
+    event->error = message;
+    PostEvent(std::move(event));
+  }
+
+  void PostEvent(std::unique_ptr<PlatformEvent> event) {
+    if (shutting_down_.load() || !window_) return;
+    PlatformEvent* raw = event.release();
+    if (!PostMessage(window_, kDispatchMessage, 0,
+                     reinterpret_cast<LPARAM>(raw))) {
+      delete raw;
+    }
+  }
+
+  void DrainPostedEvents() {
+    if (!window_) return;
+    MSG message;
+    while (PeekMessage(&message, window_, kDispatchMessage, kDispatchMessage,
+                       PM_REMOVE)) {
+      delete reinterpret_cast<PlatformEvent*>(message.lParam);
+    }
   }
 
   void CaptureMain() {
@@ -348,7 +397,7 @@ class WasapiLoopbackPlugin::Impl {
         }
         output.push_back(std::clamp(mono, -1.0, 1.0));
         if (output.size() == kFrameSamples) {
-          EmitFrame(output, format.sample_rate);
+          PostFrame(output, format.sample_rate);
           output.clear();
         }
       }
@@ -361,14 +410,15 @@ class WasapiLoopbackPlugin::Impl {
       }
     }
     audio_client->Stop();
-    if (failed && !stop_requested_.load()) EmitError(runtime_error);
+    if (failed && !stop_requested_.load()) PostError(runtime_error);
     if (uninitialize_com) CoUninitialize();
   }
 
   std::unique_ptr<flutter::MethodChannel<Value>> method_channel_;
   std::unique_ptr<flutter::EventChannel<Value>> event_channel_;
   std::unique_ptr<Sink> sink_;
-  std::mutex sink_mutex_;
+  HWND window_ = nullptr;
+  std::atomic<bool> shutting_down_{false};
 
   std::thread capture_thread_;
   std::atomic<bool> stop_requested_{false};
@@ -380,9 +430,15 @@ class WasapiLoopbackPlugin::Impl {
 };
 
 WasapiLoopbackPlugin::WasapiLoopbackPlugin(
-    flutter::BinaryMessenger* messenger)
-    : impl_(std::make_unique<Impl>(messenger)) {}
+    flutter::BinaryMessenger* messenger, HWND window)
+    : impl_(std::make_unique<Impl>(messenger, window)) {}
 
 WasapiLoopbackPlugin::~WasapiLoopbackPlugin() = default;
+
+bool WasapiLoopbackPlugin::HandleWindowMessage(UINT message, WPARAM,
+                                               LPARAM lparam,
+                                               LRESULT* result) {
+  return impl_->HandleWindowMessage(message, lparam, result);
+}
 
 }  // namespace lightdome

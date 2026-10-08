@@ -2,6 +2,7 @@
 #define RUNNER_WASAPI_LOOPBACK_H_
 
 #include <flutter/binary_messenger.h>
+#include <windows.h>
 
 #include <atomic>
 #include <condition_variable>
@@ -14,11 +15,15 @@ namespace lightdome {
 
 class WasapiLoopbackPlugin {
  public:
-  explicit WasapiLoopbackPlugin(flutter::BinaryMessenger* messenger);
+  WasapiLoopbackPlugin(flutter::BinaryMessenger* messenger, HWND window);
   ~WasapiLoopbackPlugin();
 
   WasapiLoopbackPlugin(const WasapiLoopbackPlugin&) = delete;
   WasapiLoopbackPlugin& operator=(const WasapiLoopbackPlugin&) = delete;
+
+  // Must be called by the owning window on its platform thread.
+  bool HandleWindowMessage(UINT message, WPARAM wparam, LPARAM lparam,
+                           LRESULT* result);
 
  private:
   class Impl;
