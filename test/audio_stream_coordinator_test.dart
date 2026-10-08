@@ -60,4 +60,39 @@ void main() {
     await session.stop();
     expect(lost, 1);
   });
+
+  test('rapid frames are coalesced and network sends never overlap', () async {
+    final fake = TestCapture();
+    var activeSends = 0;
+    var maxActiveSends = 0;
+    var totalSends = 0;
+    final session = AudioStreamCoordinator(
+      source: fake,
+      processor: AudioFeatureProcessor(),
+      sendLevel: (level) async {
+        activeSends++;
+        totalSends++;
+        maxActiveSends = math.max(maxActiveSends, activeSends);
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        activeSends--;
+      },
+      onAudioLost: () async {},
+    );
+    await session.start();
+    for (var i = 0; i < 10; i++) {
+      fake.controller.add(
+        AudioPcmChunk(
+          List.generate(
+            512,
+            (sample) => math.sin(2 * math.pi * (100 + i) * sample / 16000),
+          ),
+          16000,
+        ),
+      );
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    expect(maxActiveSends, 1);
+    expect(totalSends, lessThan(10));
+    await session.stop();
+  });
 }

@@ -203,6 +203,9 @@ void updateSmoothOutput() {
 }
 
 void enterLiveMode() {
+  // Any explicit non-audio action takes ownership away from the watchdog.
+  // handleSet() can arm it again immediately when audio=1 is present.
+  audioStreamArmed = false;
   // Ferma qualsiasi player attivo
   if (programPlaying) {
     programPlaying = false;
@@ -786,6 +789,20 @@ void handleProgSaveMeta() {
       if (autorunLoop) autorunLoop.close();
       server.send(500, "text/plain", "Impossibile impostare autorun");
       return;
+    }
+  } else if (LittleFS.exists(AUTORUN_FILE)) {
+    // Turning autorun off while replacing its current pattern must also clear
+    // the persisted boot selection. Leave a different autorun pattern alone.
+    File autorunFile = LittleFS.open(AUTORUN_FILE, "r");
+    String autorunName;
+    if (autorunFile) {
+      autorunName = autorunFile.readStringUntil('\n');
+      autorunFile.close();
+      autorunName.trim();
+    }
+    if (autorunName == uploadName) {
+      LittleFS.remove(AUTORUN_FILE);
+      LittleFS.remove(AUTORUN_LOOP);
     }
   }
   server.send(200, "text/plain", "Salvato: " + uploadName);

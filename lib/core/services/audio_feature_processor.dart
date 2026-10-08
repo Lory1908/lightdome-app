@@ -10,6 +10,11 @@ class AudioTuning {
     this.release = .3,
     this.minimum = 0,
     this.maximum = 1,
+    this.volumeWeight = .4,
+    this.bassWeight = .35,
+    this.midWeight = .15,
+    this.trebleWeight = .1,
+    this.beatBoost = .15,
   });
 
   final double gain;
@@ -18,6 +23,11 @@ class AudioTuning {
   final double release;
   final double minimum;
   final double maximum;
+  final double volumeWeight;
+  final double bassWeight;
+  final double midWeight;
+  final double trebleWeight;
+  final double beatBoost;
 }
 
 class AudioFeatures {
@@ -91,9 +101,23 @@ class AudioFeatureProcessor {
     final beat = bass > .055 && bass > _recentBass * 1.6;
     _recentBass = .92 * _recentBass + .08 * bass;
 
-    final gated = volume < tuning.gate
+    final volumeWeight = tuning.volumeWeight.clamp(0.0, 1.0);
+    final bassWeight = tuning.bassWeight.clamp(0.0, 1.0);
+    final midWeight = tuning.midWeight.clamp(0.0, 1.0);
+    final trebleWeight = tuning.trebleWeight.clamp(0.0, 1.0);
+    final weightTotal = volumeWeight + bassWeight + midWeight + trebleWeight;
+    var drive = weightTotal <= 0
+        ? volume
+        : (volume * volumeWeight +
+                  bass * bassWeight +
+                  mid * midWeight +
+                  treble * trebleWeight) /
+              weightTotal;
+    if (beat) drive = (drive + tuning.beatBoost.clamp(0.0, 1.0)).clamp(0, 1);
+
+    final gated = drive < tuning.gate
         ? 0.0
-        : (volume * tuning.gain).clamp(0.0, 1.0);
+        : (drive * tuning.gain).clamp(0.0, 1.0);
     final alpha = (gated > _envelope ? tuning.attack : tuning.release).clamp(
       0.0,
       1.0,

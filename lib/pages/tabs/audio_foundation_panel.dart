@@ -16,6 +16,11 @@ class AudioFoundationPanel extends StatefulWidget {
 class _AudioFoundationPanelState extends State<AudioFoundationPanel> {
   final AudioCaptureSource source = const UnavailableSystemAudioSource();
   double gain = 1, gate = .05, attack = .65, release = .3, min = 0, max = 1;
+  double volumeWeight = .4;
+  double bassWeight = .35;
+  double midWeight = .15;
+  double trebleWeight = .1;
+  double beatBoost = .15;
   String? fallback;
   String? fallbackMessage;
   bool savingFallback = false;
@@ -66,6 +71,11 @@ class _AudioFoundationPanelState extends State<AudioFoundationPanel> {
       release: release,
       minimum: min,
       maximum: max,
+      volumeWeight: volumeWeight,
+      bassWeight: bassWeight,
+      midWeight: midWeight,
+      trebleWeight: trebleWeight,
+      beatBoost: beatBoost,
     );
     final scheme = Theme.of(context).colorScheme;
     return Card(
@@ -135,6 +145,45 @@ class _AudioFoundationPanelState extends State<AudioFoundationPanel> {
             1,
             (v) => setState(() => max = v.clamp(min, 1)),
           ),
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: Text('Risposta alle frequenze'),
+          ),
+          _slider(
+            'Influenza volume',
+            volumeWeight,
+            0,
+            1,
+            (v) => setState(() => volumeWeight = v),
+          ),
+          _slider(
+            'Influenza bassi',
+            bassWeight,
+            0,
+            1,
+            (v) => setState(() => bassWeight = v),
+          ),
+          _slider(
+            'Influenza medi',
+            midWeight,
+            0,
+            1,
+            (v) => setState(() => midWeight = v),
+          ),
+          _slider(
+            'Influenza alti',
+            trebleWeight,
+            0,
+            1,
+            (v) => setState(() => trebleWeight = v),
+          ),
+          _slider(
+            'Spinta sul battito',
+            beatBoost,
+            0,
+            1,
+            (v) => setState(() => beatBoost = v),
+          ),
           Text(
             'In assenza di audio: dissolvenza, oppure pattern di riserva selezionato. La protezione sarà eseguita dal firmware.',
             style: TextStyle(color: scheme.onSurfaceVariant),
@@ -170,7 +219,7 @@ class _AudioFoundationPanelState extends State<AudioFoundationPanel> {
           if (fallbackMessage != null) Text(fallbackMessage!),
           const SizedBox(height: 8),
           Text(
-            'Parametri preparati: gain ${tuning.gain.toStringAsFixed(2)}, gate ${tuning.gate.toStringAsFixed(2)}.',
+            'Parametri preparati: gain ${tuning.gain.toStringAsFixed(2)}, gate ${tuning.gate.toStringAsFixed(2)}, risposta V/B/M/A ${tuning.volumeWeight.toStringAsFixed(2)}/${tuning.bassWeight.toStringAsFixed(2)}/${tuning.midWeight.toStringAsFixed(2)}/${tuning.trebleWeight.toStringAsFixed(2)}.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 6),

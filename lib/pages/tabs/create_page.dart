@@ -78,7 +78,7 @@ class _CreatePageState extends State<CreatePage> {
       _type = type;
       switch (type) {
         case PatternRecipeType.breath:
-          _name.text = 'respiro';
+          if (widget.editName == null) _name.text = 'respiro';
           _duration = 4;
           _minimum = .08;
           _maximum = 1;
@@ -86,7 +86,7 @@ class _CreatePageState extends State<CreatePage> {
           _easing = PatternEasing.smooth;
           break;
         case PatternRecipeType.pulse:
-          _name.text = 'battito';
+          if (widget.editName == null) _name.text = 'battito';
           _duration = 1.4;
           _minimum = .05;
           _maximum = 1;
@@ -94,7 +94,7 @@ class _CreatePageState extends State<CreatePage> {
           _easing = PatternEasing.sharp;
           break;
         case PatternRecipeType.sunrise:
-          _name.text = 'alba';
+          if (widget.editName == null) _name.text = 'alba';
           _duration = 12;
           _minimum = .02;
           _maximum = 1;
@@ -102,7 +102,7 @@ class _CreatePageState extends State<CreatePage> {
           _easing = PatternEasing.natural;
           break;
         case PatternRecipeType.organic:
-          _name.text = 'organico';
+          if (widget.editName == null) _name.text = 'organico';
           _duration = 6;
           _minimum = .18;
           _maximum = .82;

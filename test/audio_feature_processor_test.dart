@@ -60,6 +60,33 @@ void main() {
     expect(fading.intensity, greaterThan(0));
   });
 
+  test('band weights materially change the resulting intensity', () {
+    final bassOnly = AudioFeatureProcessor(
+      tuning: const AudioTuning(
+        attack: 1,
+        volumeWeight: 0,
+        bassWeight: 1,
+        midWeight: 0,
+        trebleWeight: 0,
+        beatBoost: 0,
+      ),
+    );
+    final trebleOnly = AudioFeatureProcessor(
+      tuning: const AudioTuning(
+        attack: 1,
+        volumeWeight: 0,
+        bassWeight: 0,
+        midWeight: 0,
+        trebleWeight: 1,
+        beatBoost: 0,
+      ),
+    );
+    expect(
+      bassOnly.process(sine(110, .8)).intensity,
+      greaterThan(trebleOnly.process(sine(110, .8)).intensity),
+    );
+  });
+
   test('invalid PCM rejected', () {
     final processor = AudioFeatureProcessor();
     expect(
