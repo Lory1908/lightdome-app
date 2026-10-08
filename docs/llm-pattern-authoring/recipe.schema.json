@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lightdome.local/docs/recipe.schema.json",
+  "title": "LightDome declarative pattern recipe",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["preset", "duration", "minimum", "maximum", "duty", "easing", "randomness", "loop", "autorun"],
+  "properties": {
+    "preset": {"type": "string", "enum": ["breath", "pulse", "sunrise", "random"]},
+    "duration": {"type": "number", "minimum": 1, "maximum": 20},
+    "minimum": {"type": "number", "minimum": 0, "maximum": 90},
+    "maximum": {"type": "number", "minimum": 10, "maximum": 100},
+    "duty": {"type": "number", "minimum": 5, "maximum": 95},
+    "easing": {"type": "string", "enum": ["smooth", "sine", "linear", "sharp"]},
+    "randomness": {"type": "number", "minimum": 0, "maximum": 100},
+    "loop": {"type": "boolean"},
+    "autorun": {"type": "boolean"}
+  },
+  "description": "All intensity, duty, randomness fields are percentages. Extra invariant: minimum <= maximum, enforced by local validator."
+}

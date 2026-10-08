@@ -1,0 +1,11 @@
+{
+  "preset": "sunrise",
+  "duration": 12,
+  "minimum": 2,
+  "maximum": 100,
+  "duty": 80,
+  "easing": "sine",
+  "randomness": 20,
+  "loop": false,
+  "autorun": false
+}

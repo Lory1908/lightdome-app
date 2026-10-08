@@ -1,0 +1,11 @@
+{
+  "preset": "breath",
+  "duration": 4,
+  "minimum": 8,
+  "maximum": 100,
+  "duty": 50,
+  "easing": "smooth",
+  "randomness": 20,
+  "loop": true,
+  "autorun": false
+}

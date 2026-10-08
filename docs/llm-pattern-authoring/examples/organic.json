@@ -1,0 +1,11 @@
+{
+  "preset": "random",
+  "duration": 6,
+  "minimum": 18,
+  "maximum": 82,
+  "duty": 50,
+  "easing": "smooth",
+  "randomness": 55,
+  "loop": true,
+  "autorun": false
+}
