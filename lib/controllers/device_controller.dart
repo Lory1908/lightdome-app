@@ -269,6 +269,27 @@ class DeviceController extends ChangeNotifier {
     await api.configureAudioFallback(name);
   }
 
+  Future<void> sendAudioLevel(double level) async {
+    final api = _api;
+    if (api == null) throw StateError('Cupola non connessa');
+    SignalMonitor.I.pushTx(level);
+    await api.sendAudioY(level);
+  }
+
+  Future<void> finishAudioStream({String? fallback}) async {
+    final api = _api;
+    if (api == null) return;
+    try {
+      if (fallback != null && fallback.isNotEmpty) {
+        await api.startProgram(fallback);
+      } else {
+        await api.stopAudio();
+      }
+    } catch (_) {
+      // The firmware watchdog remains the final safety net if the LAN vanished.
+    }
+  }
+
   Future<PatternDraft?> loadProgramDraft(String name) async {
     final api = _api;
     if (api == null) throw StateError('Cupola non connessa');
