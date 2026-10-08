@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import '../models/device_state.dart';
 import '../models/wifi_config.dart';
+import '../models/pattern_draft.dart';
 import 'http_client.dart';
 
 class DeviceApi {
@@ -57,6 +58,22 @@ class DeviceApi {
     await getText(_u('/params?$qs'));
   }
 
+  // Editor metadata: 404 is the documented legacy-LDY path, other failures propagate.
+  Future<PatternDraft?> fetchProgramDraft(String name) async {
+    if (!RegExp(r'^[A-Za-z0-9_-]{1,48}$').hasMatch(name)) {
+      throw const FormatException('Nome non valido');
+    }
+    try {
+      final value = await getJson(
+        _u('/prog/meta?name=${Uri.encodeComponent(name)}'),
+      );
+      return PatternDraft.fromJson(value);
+    } catch (error) {
+      if (error.toString().contains('404')) return null;
+      rethrow;
+    }
+  }
+
   // Programs (basic)
   Future<List<String>> listPrograms() async {
     try {
@@ -65,7 +82,14 @@ class DeviceApi {
       return lines
           .map((e) => e.trim())
           .where((e) => e.isNotEmpty && e != '(vuoto)')
-          .map((e) => e.replaceAll('.ldy', '').split(' ').first)
+          .map((e) => e.split(' ').first.replaceFirst(RegExp(r'^/?prog/'), ''))
+          .where((e) => e.endsWith('.ldy'))
+          .map((e) => e.substring(0, e.length - 4))
+          .where(
+            (e) =>
+                RegExp(r'^[A-Za-z0-9_-]{1,48}$').hasMatch(e) &&
+                e != '_anteprima',
+          )
           .toList();
     } catch (_) {
       return [];

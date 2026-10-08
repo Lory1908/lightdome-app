@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 
 import '../../controllers/device_controller.dart';
 import '../../core/models/pattern.dart';
+import '../../core/models/pattern_draft.dart';
+import 'create_page.dart';
 
 class ProgramsPage extends StatefulWidget {
   const ProgramsPage({super.key});
@@ -48,6 +50,33 @@ class _ProgramsPageState extends State<ProgramsPage> {
       _programs = items;
       _loading = false;
     });
+  }
+
+  Future<void> _edit(String name) async {
+    try {
+      final metadata = await DeviceController.I.loadProgramDraft(name);
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => Scaffold(
+            appBar: AppBar(title: Text('Modifica $name')),
+            body: CreatePage(
+              editName: name,
+              initialDraft: metadata ?? PatternDraft.legacy(name),
+              guessed: metadata == null,
+            ),
+          ),
+        ),
+      );
+      if (mounted) await _refresh();
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _message =
+              'Impossibile leggere i parametri dalla cupola. Riprova quando è connessa.',
+        );
+      }
+    }
   }
 
   Future<void> _pickFile() async {
@@ -216,6 +245,11 @@ class _ProgramsPageState extends State<ProgramsPage> {
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    IconButton(
+                      tooltip: 'Modifica',
+                      onPressed: () => _edit(program),
+                      icon: const Icon(Icons.edit_outlined),
+                    ),
                     IconButton.filledTonal(
                       tooltip: 'Avvia',
                       onPressed: () => controller.startProgram(program),

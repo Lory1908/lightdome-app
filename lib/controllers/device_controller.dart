@@ -8,6 +8,7 @@ import '../core/services/live_stream_service.dart';
 import '../core/services/state_poller.dart';
 import '../core/persistence/prefs.dart';
 import '../core/models/pattern.dart';
+import '../core/models/pattern_draft.dart';
 import '../core/services/pattern_runner.dart';
 import '../core/services/envelope_builder.dart';
 import '../core/ldy/ldy_encoder.dart';
@@ -262,10 +263,17 @@ class DeviceController extends ChangeNotifier {
     await refreshOnce();
   }
 
+  Future<PatternDraft?> loadProgramDraft(String name) async {
+    final api = _api;
+    if (api == null) throw StateError('Cupola non connessa');
+    return api.fetchProgramDraft(name);
+  }
+
   Future<void> saveGeneratedProgram({
     required String name,
     required int sampleRateHz,
     required List<int> samples,
+    required PatternDraft draft,
     required bool loop,
     required bool autorun,
     bool start = true,
@@ -275,7 +283,11 @@ class DeviceController extends ChangeNotifier {
       throw Exception('Cupola non connessa');
     }
     await api.setParams(loop: loop);
-    final bytes = LdyEncoder.encode(sampleRateHz: sampleRateHz, y1023: samples);
+    final bytes = LdyEncoder.encode(
+      sampleRateHz: sampleRateHz,
+      y1023: samples,
+      recipeMetadata: draft.toJson(),
+    );
     await api.saveProgramLdy(
       name: name,
       bytes: bytes,

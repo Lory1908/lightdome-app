@@ -2,9 +2,19 @@ import 'package:flutter/material.dart';
 
 import '../../controllers/device_controller.dart';
 import '../../core/models/pattern_recipe.dart';
+import '../../core/models/pattern_draft.dart';
 
 class CreatePage extends StatefulWidget {
-  const CreatePage({super.key});
+  const CreatePage({
+    super.key,
+    this.editName,
+    this.initialDraft,
+    this.guessed = false,
+  });
+
+  final String? editName;
+  final PatternDraft? initialDraft;
+  final bool guessed;
 
   @override
   State<CreatePage> createState() => _CreatePageState();
@@ -24,6 +34,28 @@ class _CreatePageState extends State<CreatePage> {
   bool _saving = false;
   String? _message;
   bool _error = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final draft = widget.initialDraft;
+    if (draft != null) {
+      _name.text = widget.editName ?? 'respiro';
+      _type = draft.recipe.type;
+      _duration = draft.recipe.durationSeconds;
+      _minimum = draft.recipe.minimum;
+      _maximum = draft.recipe.maximum;
+      _duty = draft.recipe.duty;
+      _easing = draft.recipe.easing;
+      _randomness = draft.recipe.randomness;
+      _loop = draft.loop;
+      _autorun = draft.autorun;
+      if (widget.guessed) {
+        _message =
+            'Questo file non contiene i parametri originali. I valori proposti sono indicativi: controlla l’anteprima prima di sostituirlo.';
+      }
+    }
+  }
 
   PatternRecipe get _recipe => PatternRecipe(
     type: _type,
@@ -82,7 +114,7 @@ class _CreatePageState extends State<CreatePage> {
   }
 
   Future<void> _save() async {
-    final name = _name.text.trim();
+    final name = widget.editName ?? _name.text.trim();
     if (!RegExp(r'^[A-Za-z0-9_-]{1,48}$').hasMatch(name)) {
       setState(() {
         _error = true;
@@ -100,6 +132,7 @@ class _CreatePageState extends State<CreatePage> {
         name: name,
         sampleRateHz: _recipe.sampleRateHz,
         samples: _recipe.render(),
+        draft: PatternDraft(recipe: _recipe, loop: _loop, autorun: _autorun),
         loop: _loop,
         autorun: _autorun,
       );
@@ -126,12 +159,14 @@ class _CreatePageState extends State<CreatePage> {
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
       children: [
         Text(
-          'Crea un’atmosfera',
+          widget.editName == null ? 'Crea un’atmosfera' : 'Modifica il pattern',
           style: Theme.of(context).textTheme.headlineMedium,
         ),
         const SizedBox(height: 5),
         Text(
-          'Parti da un’idea semplice. LightDome la trasforma in un pattern autonomo.',
+          widget.editName == null
+              ? 'Parti da un’idea semplice. LightDome la trasforma in un pattern autonomo.'
+              : 'Modifica i valori e controlla l’anteprima: il file originale verrà sostituito soltanto dopo la verifica del nuovo file.',
           style: Theme.of(
             context,
           ).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
@@ -177,6 +212,7 @@ class _CreatePageState extends State<CreatePage> {
                 const SizedBox(height: 20),
                 TextField(
                   controller: _name,
+                  readOnly: widget.editName != null,
                   decoration: const InputDecoration(
                     labelText: 'Nome del pattern',
                     helperText: 'Verrà salvato direttamente nella cupola.',
@@ -302,7 +338,13 @@ class _CreatePageState extends State<CreatePage> {
                   child: FilledButton.icon(
                     onPressed: _saving ? null : _save,
                     icon: const Icon(Icons.play_arrow_rounded),
-                    label: Text(_saving ? 'Salvataggio…' : 'Salva e avvia'),
+                    label: Text(
+                      _saving
+                          ? 'Salvataggio…'
+                          : widget.editName == null
+                          ? 'Salva e avvia'
+                          : 'Sostituisci e avvia',
+                    ),
                   ),
                 ),
                 if (_message != null) ...[
