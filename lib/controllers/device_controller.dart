@@ -263,6 +263,12 @@ class DeviceController extends ChangeNotifier {
     await refreshOnce();
   }
 
+  Future<void> setAudioFallback(String? name) async {
+    final api = _api;
+    if (api == null) throw StateError('Cupola non connessa');
+    await api.configureAudioFallback(name);
+  }
+
   Future<PatternDraft?> loadProgramDraft(String name) async {
     final api = _api;
     if (api == null) throw StateError('Cupola non connessa');

@@ -34,6 +34,26 @@ class DeviceApi {
     await getText(_u('/set?y=$y1023&smooth=90'));
   }
 
+  /// Opt-in audio stream: the ESP8266 fades out or starts a stored fallback
+  /// if no heartbeat arrives within 1200 ms. Legacy /set is unchanged.
+  Future<void> sendAudioY(double y01) async {
+    final y1023 = (y01.clamp(0.0, 1.0) * 1023).round();
+    await getText(_u('/set?y=$y1023&smooth=90&audio=1'));
+  }
+
+  Future<void> configureAudioFallback(String? programName) async {
+    if (programName != null &&
+        !RegExp(r'^[A-Za-z0-9_-]{1,48}$').hasMatch(programName)) {
+      throw const FormatException('Nome pattern non valido');
+    }
+    await postJson(_u('/audio/config'), {'fallback': programName});
+  }
+
+  /// Explicitly leave audio mode and smoothly turn off on normal stop.
+  Future<void> stopAudio() async {
+    await getText(_u('/set?y=0&smooth=350'));
+  }
+
   Future<void> off() async {
     await getText(_u('/set?y=0'));
   }

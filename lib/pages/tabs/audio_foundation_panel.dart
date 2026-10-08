@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/services/audio_capture_source.dart';
 import '../../core/services/audio_feature_processor.dart';
+import '../../controllers/device_controller.dart';
 
 /// Preparation UI: does not present a capture control without a real provider.
 class AudioFoundationPanel extends StatefulWidget {
@@ -15,6 +16,46 @@ class AudioFoundationPanel extends StatefulWidget {
 class _AudioFoundationPanelState extends State<AudioFoundationPanel> {
   final AudioCaptureSource source = const UnavailableSystemAudioSource();
   double gain = 1, gate = .05, attack = .65, release = .3, min = 0, max = 1;
+  String? fallback;
+  String? fallbackMessage;
+  bool savingFallback = false;
+  late final Future<List<String>> patterns;
+
+  @override
+  void initState() {
+    super.initState();
+    patterns = DeviceController.I.listPrograms();
+  }
+
+  Future<void> selectFallback(String? chosen) async {
+    if (!DeviceController.I.isConnected) {
+      setState(
+        () => fallbackMessage = 'Connetti la cupola per applicare la scelta.',
+      );
+      return;
+    }
+    setState(() => savingFallback = true);
+    try {
+      await DeviceController.I.setAudioFallback(chosen);
+      if (mounted) {
+        setState(() {
+          fallback = chosen;
+          fallbackMessage = chosen == null
+              ? 'In caso di interruzione la luce si spegnerà gradualmente.'
+              : 'In caso di interruzione partirà il pattern $chosen.';
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => fallbackMessage =
+              'Non posso configurare il recupero. Verifica connessione e versione firmware.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => savingFallback = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -98,6 +139,35 @@ class _AudioFoundationPanelState extends State<AudioFoundationPanel> {
             'In assenza di audio: dissolvenza, oppure pattern di riserva selezionato. La protezione sarà eseguita dal firmware.',
             style: TextStyle(color: scheme.onSurfaceVariant),
           ),
+          FutureBuilder<List<String>>(
+            future: patterns,
+            builder: (context, snapshot) {
+              final names = snapshot.data ?? const <String>[];
+              return DropdownButtonFormField<String>(
+                key: ValueKey(fallback),
+                initialValue: fallback ?? '',
+                decoration: const InputDecoration(
+                  labelText: 'Quando l’audio si interrompe',
+                ),
+                items: [
+                  const DropdownMenuItem(
+                    value: '',
+                    child: Text('Spegni gradualmente'),
+                  ),
+                  ...names.map(
+                    (name) => DropdownMenuItem(
+                      value: name,
+                      child: Text('Avvia $name'),
+                    ),
+                  ),
+                ],
+                onChanged: savingFallback
+                    ? null
+                    : (choice) => selectFallback(choice == '' ? null : choice),
+              );
+            },
+          ),
+          if (fallbackMessage != null) Text(fallbackMessage!),
           const SizedBox(height: 8),
           Text(
             'Parametri preparati: gain ${tuning.gain.toStringAsFixed(2)}, gate ${tuning.gate.toStringAsFixed(2)}.',

@@ -83,6 +83,11 @@ uint16_t liveTransitionMs = 90;
 uint16_t activeTransitionMs = 0;
 uint32_t transitionStartedMs = 0;
 uint32_t lastRenderUs = 0;
+// Audio stream watchdog is opt-in: legacy /set remains unchanged.
+const uint32_t AUDIO_TIMEOUT_MS = 1200;
+bool audioStreamArmed = false;
+uint32_t lastAudioPacketMs = 0;
+String audioFallbackName;
 
 // ---- PLAYER RAM (compat) -------------------------------------------------
 struct Step {
@@ -364,6 +369,9 @@ void handleSet() {
     return;
   }
   enterLiveMode();
+  audioStreamArmed = server.hasArg("audio") && server.arg("audio") == "1";
+  if (audioStreamArmed)
+    lastAudioPacketMs = millis();
   levelY = clamp16(server.arg("y").toInt(), 0, 1023);
   uint16_t transitionMs = liveTransitionMs;
   if (server.hasArg("smooth"))
@@ -532,6 +540,8 @@ void handleApiStateGet() {
   doc["outputLevel"] = (uint16_t)(renderedLevelY + 0.5f);
   doc["targetLevel"] = targetLevelY;
   doc["smoothMs"] = liveTransitionMs;
+  doc["audioStreamActive"] = audioStreamArmed;
+  doc["audioFallback"] = audioFallbackName;
   doc["loop"] = loopEnabled;
   doc["programName"] = programName;
   doc["sampleRateHz"] = sampleRateHz;
@@ -560,6 +570,7 @@ void handleApiStatePost() {
     return;
   }
   enterLiveMode();
+  audioStreamArmed = false;
   bool reqOn = !doc["on"].isNull() ? doc["on"].as<bool>() : isOn;
   String mode =
       !doc["mode"].isNull() ? String((const char *)doc["mode"]) : "mono";
@@ -671,6 +682,7 @@ bool startProgramByName(const String &name) {
   }
 
   candidate.seek(sizeof(LdyHeader), SeekSet);
+  audioStreamArmed = false;
   stopProgram();
   ramPlaying = false;
   progFile = candidate;
@@ -951,6 +963,35 @@ void handleProgDelete() {
     server.send(404, "text/plain", "Non trovato");
 }
 
+// -------------------- Audio watchdog configuration --------------------------
+// Optional and volatile: no flash writes for frequently changing audio modes.
+void handleAudioConfig() {
+  sendCORS();
+  if (!server.hasArg("plain")) {
+    server.send(400, "text/plain", "JSON mancante");
+    return;
+  }
+  JsonDocument doc;
+  if (deserializeJson(doc, server.arg("plain"))) {
+    server.send(400, "text/plain", "JSON non valido");
+    return;
+  }
+  if (!doc["fallback"].isNull() && !doc["fallback"].is<const char *>()) {
+    server.send(400, "text/plain", "Fallback non valido");
+    return;
+  }
+  const String name = doc["fallback"].isNull()
+                          ? String()
+                          : String(doc["fallback"].as<const char *>());
+  if (name.length() && (!isValidProgramName(name) || !littleFsMounted ||
+                        !LittleFS.exists(programPath(name)))) {
+    server.send(400, "text/plain", "Pattern di riserva non disponibile");
+    return;
+  }
+  audioFallbackName = name;
+  server.send(204);
+}
+
 // -------------------- Wi-Fi / captive portal -----------------------------
 bool validWifiCredentials(const String &ssid, const String &password) {
   if (ssid.length() == 0 || ssid.length() > 32)
@@ -1222,6 +1263,7 @@ void setup() {
   server.on("/prog/stop", HTTP_POST, handleProgStop);
   server.on("/prog/list", HTTP_GET, handleProgList);
   server.on("/prog/meta", HTTP_GET, handleProgMeta);
+  server.on("/audio/config", HTTP_POST, handleAudioConfig);
   server.on("/prog/delete", HTTP_DELETE, handleProgDelete);
   server.on("/", HTTP_OPTIONS, handleOptions);
   server.on("/wifi", HTTP_OPTIONS, handleOptions);
@@ -1241,6 +1283,7 @@ void setup() {
   server.on("/prog/stop", HTTP_OPTIONS, handleOptions);
   server.on("/prog/list", HTTP_OPTIONS, handleOptions);
   server.on("/prog/meta", HTTP_OPTIONS, handleOptions);
+  server.on("/audio/config", HTTP_OPTIONS, handleOptions);
   server.on("/prog/delete", HTTP_OPTIONS, handleOptions);
   // ArduinoOTA e HTTP OTA disabilitati: non inizializzare servizi senza
   // password privata.
@@ -1275,6 +1318,12 @@ void loop() {
   if (restartAtMs != 0 && (int32_t)(millis() - restartAtMs) >= 0) {
     delay(50);
     ESP.restart();
+  }
+  if (audioStreamArmed && (uint32_t)(millis() - lastAudioPacketMs) > AUDIO_TIMEOUT_MS) {
+    audioStreamArmed = false;
+    // A disconnected phone/computer must not leave the last light value on.
+    if (audioFallbackName.isEmpty() || !startProgramByName(audioFallbackName))
+      setOutputTarget(0, 350);
   }
   if (programPlaying) {
     if (sampleRateHz == 0)
