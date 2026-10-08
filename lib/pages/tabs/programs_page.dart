@@ -8,6 +8,7 @@ import '../../controllers/device_controller.dart';
 import '../../core/models/pattern.dart';
 import '../../core/models/pattern_draft.dart';
 import 'create_page.dart';
+import 'audio_foundation_panel.dart';
 
 class ProgramsPage extends StatefulWidget {
   const ProgramsPage({super.key});
@@ -333,6 +334,8 @@ class _ProgramsPageState extends State<ProgramsPage> {
               ],
             ),
           ),
+          const SizedBox(height: 9),
+          const AudioFoundationPanel(),
           const SizedBox(height: 9),
           Card(
             child: ExpansionTile(
