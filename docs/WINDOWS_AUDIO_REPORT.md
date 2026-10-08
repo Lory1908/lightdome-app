@@ -1,8 +1,8 @@
 # Report implementazione audio di sistema Windows
 
-Data: 2026-10-08  
-Branch: `agent/pre-home-work`  
-Base richiesta: `6bd966e`  
+Data: 2026-10-08
+Branch: `agent/pre-home-work`
+Base richiesta: `6bd966e`
 Commit implementazione: `31498e2`
 
 ## Risultato
