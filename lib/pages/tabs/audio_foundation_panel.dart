@@ -1,14 +1,11 @@
-import 'dart:async';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/services/audio_capture_source.dart';
 import '../../core/services/audio_feature_processor.dart';
-import '../../core/services/audio_stream_coordinator.dart';
-import '../../core/services/system_audio_source.dart';
 import '../../controllers/device_controller.dart';
 
-/// System-audio controls. The platform source stays unavailable outside Windows.
+/// Preparation UI: does not present a capture control without a real provider.
 class AudioFoundationPanel extends StatefulWidget {
   const AudioFoundationPanel({super.key});
 
@@ -17,11 +14,7 @@ class AudioFoundationPanel extends StatefulWidget {
 }
 
 class _AudioFoundationPanelState extends State<AudioFoundationPanel> {
-  late final AudioCaptureSource source;
-  AudioStreamCoordinator? session;
-  AudioFeatures? features;
-  bool starting = false;
-  String? streamMessage;
+  final AudioCaptureSource source = const UnavailableSystemAudioSource();
   double gain = 1, gate = .05, attack = .65, release = .3, min = 0, max = 1;
   double volumeWeight = .4;
   double bassWeight = .35;
@@ -36,103 +29,7 @@ class _AudioFoundationPanelState extends State<AudioFoundationPanel> {
   @override
   void initState() {
     super.initState();
-    source = createSystemAudioSource();
     patterns = DeviceController.I.listPrograms();
-  }
-
-  @override
-  void dispose() {
-    final active = session;
-    session = null;
-    if (active != null) unawaited(active.stop());
-    super.dispose();
-  }
-
-  AudioTuning get tuning => AudioTuning(
-    gain: gain,
-    gate: gate,
-    attack: attack,
-    release: release,
-    minimum: min,
-    maximum: max,
-    volumeWeight: volumeWeight,
-    bassWeight: bassWeight,
-    midWeight: midWeight,
-    trebleWeight: trebleWeight,
-    beatBoost: beatBoost,
-  );
-
-  Future<void> toggleAudio() async {
-    final current = session;
-    if (current?.running == true) {
-      setState(() {
-        starting = true;
-        streamMessage = 'Arresto audio…';
-      });
-      await current!.stop();
-      if (mounted) {
-        setState(() {
-          starting = false;
-          session = null;
-          streamMessage = 'Audio fermato.';
-        });
-      }
-      return;
-    }
-    if (!source.isSupported || !DeviceController.I.isConnected) return;
-    setState(() {
-      starting = true;
-      streamMessage = 'Avvio audio Windows…';
-    });
-    final processor = AudioFeatureProcessor(tuning: tuning);
-    late final AudioStreamCoordinator next;
-    next = AudioStreamCoordinator(
-      source: source,
-      processor: processor,
-      sendLevel: DeviceController.I.sendAudioLevel,
-      onAudioLost: () async {
-        await DeviceController.I.finishAudioStream(fallback: fallback);
-        if (mounted) {
-          setState(() {
-            if (identical(session, next)) session = null;
-            starting = false;
-            streamMessage = 'Audio interrotto: recupero applicato.';
-          });
-        }
-      },
-      onFeatures: (value) {
-        if (mounted) setState(() => features = value);
-      },
-    );
-    session = next;
-    try {
-      await next.start();
-      if (mounted) {
-        setState(() {
-          starting = false;
-          streamMessage = 'Audio Windows in trasmissione.';
-        });
-      }
-    } catch (error) {
-      if (mounted) {
-        setState(() {
-          starting = false;
-          if (identical(session, next)) session = null;
-          streamMessage = 'Avvio non riuscito: ${_friendlyError(error)}';
-        });
-      }
-    }
-  }
-
-  String _friendlyError(Object error) {
-    final text = error.toString();
-    final marker = text.indexOf(': ');
-    return marker >= 0 ? text.substring(marker + 2) : text;
-  }
-
-  void updateTuning(VoidCallback change) {
-    setState(change);
-    session?.processor.tuning = tuning;
   }
 
   Future<void> selectFallback(String? chosen) async {
@@ -167,94 +64,86 @@ class _AudioFoundationPanelState extends State<AudioFoundationPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final active = session?.running == true;
-    final currentFeatures = features;
+    final tuning = AudioTuning(
+      gain: gain,
+      gate: gate,
+      attack: attack,
+      release: release,
+      minimum: min,
+      maximum: max,
+      volumeWeight: volumeWeight,
+      bassWeight: bassWeight,
+      midWeight: midWeight,
+      trebleWeight: trebleWeight,
+      beatBoost: beatBoost,
+    );
     final scheme = Theme.of(context).colorScheme;
     return Card(
       child: ExpansionTile(
         leading: const Icon(Icons.computer_rounded),
         title: const Text('Audio del computer'),
-        subtitle: const Text('Luce reattiva all’audio riprodotto da Windows'),
+        subtitle: const Text('Preparazione della modalità a bande'),
         childrenPadding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
         children: [
           ListTile(
             contentPadding: EdgeInsets.zero,
             title: Text('Sorgente: ${source.label}'),
-            subtitle: Text(source.explanation),
-            trailing: Chip(
-              label: Text(
-                active
-                    ? 'In uso'
-                    : (source.isSupported ? 'Disponibile' : 'Non disponibile'),
-              ),
+            subtitle: Text(
+              kIsWeb
+                  ? 'Il browser può richiedere la condivisione esplicita di una scheda o dello schermo, e non garantisce audio di sistema.'
+                  : source.explanation,
             ),
+            trailing: const Chip(label: Text('Non attiva')),
           ),
-          Text(
-            active
-                ? 'Trasmissione attiva verso la cupola.'
-                : 'Trasmissione ferma · Nessun audio acquisito.',
-          ),
-          if (streamMessage != null) Text(streamMessage!),
+          const Text('Trasmissione: ferma · Nessun audio acquisito'),
           const SizedBox(height: 12),
           Wrap(
             spacing: 8,
             runSpacing: 6,
-            children: [
-              Chip(label: Text('Volume ${_meter(currentFeatures?.volume)}')),
-              Chip(label: Text('Bassi ${_meter(currentFeatures?.bass)}')),
-              Chip(label: Text('Medi ${_meter(currentFeatures?.mid)}')),
-              Chip(label: Text('Alti ${_meter(currentFeatures?.treble)}')),
-              Chip(
-                label: Text(
-                  currentFeatures == null
-                      ? 'Battito —'
-                      : (currentFeatures.beat ? 'Battito ●' : 'Battito ○'),
-                ),
-              ),
+            children: const [
+              Chip(label: Text('Volume —')),
+              Chip(label: Text('Bassi —')),
+              Chip(label: Text('Medi —')),
+              Chip(label: Text('Alti —')),
+              Chip(label: Text('Battito —')),
             ],
           ),
           const SizedBox(height: 8),
-          _slider(
-            'Sensibilità',
-            gain,
-            0,
-            3,
-            (v) => updateTuning(() => gain = v),
-          ),
+          _slider('Sensibilità', gain, 0, 3, (v) => setState(() => gain = v)),
           _slider(
             'Soglia rumore',
             gate,
             0,
             .5,
-            (v) => updateTuning(() => gate = v),
+            (v) => setState(() => gate = v),
           ),
           _slider(
             'Reazione in salita',
             attack,
             0,
             1,
-            (v) => updateTuning(() => attack = v),
+            (v) => setState(() => attack = v),
           ),
           _slider(
             'Ritorno alla calma',
             release,
             0,
             1,
-            (v) => updateTuning(() => release = v),
+            (v) => setState(() => release = v),
           ),
           _slider(
             'Luce minima',
             min,
             0,
             .9,
-            (v) => updateTuning(() => min = v.clamp(0, max)),
+            (v) => setState(() => min = v.clamp(0, max)),
           ),
           _slider(
             'Luce massima',
             max,
             .1,
             1,
-            (v) => updateTuning(() => max = v.clamp(min, 1)),
+            (v) => setState(() => max = v.clamp(min, 1)),
           ),
           const Align(
             alignment: Alignment.centerLeft,
@@ -265,35 +154,35 @@ class _AudioFoundationPanelState extends State<AudioFoundationPanel> {
             volumeWeight,
             0,
             1,
-            (v) => updateTuning(() => volumeWeight = v),
+            (v) => setState(() => volumeWeight = v),
           ),
           _slider(
             'Influenza bassi',
             bassWeight,
             0,
             1,
-            (v) => updateTuning(() => bassWeight = v),
+            (v) => setState(() => bassWeight = v),
           ),
           _slider(
             'Influenza medi',
             midWeight,
             0,
             1,
-            (v) => updateTuning(() => midWeight = v),
+            (v) => setState(() => midWeight = v),
           ),
           _slider(
             'Influenza alti',
             trebleWeight,
             0,
             1,
-            (v) => updateTuning(() => trebleWeight = v),
+            (v) => setState(() => trebleWeight = v),
           ),
           _slider(
             'Spinta sul battito',
             beatBoost,
             0,
             1,
-            (v) => updateTuning(() => beatBoost = v),
+            (v) => setState(() => beatBoost = v),
           ),
           Text(
             'In assenza di audio: dissolvenza, oppure pattern di riserva selezionato. La protezione sarà eseguita dal firmware.',
@@ -330,24 +219,15 @@ class _AudioFoundationPanelState extends State<AudioFoundationPanel> {
           if (fallbackMessage != null) Text(fallbackMessage!),
           const SizedBox(height: 8),
           Text(
-            'Parametri attivi: gain ${tuning.gain.toStringAsFixed(2)}, gate ${tuning.gate.toStringAsFixed(2)}, risposta V/B/M/A ${tuning.volumeWeight.toStringAsFixed(2)}/${tuning.bassWeight.toStringAsFixed(2)}/${tuning.midWeight.toStringAsFixed(2)}/${tuning.trebleWeight.toStringAsFixed(2)}.',
+            'Parametri preparati: gain ${tuning.gain.toStringAsFixed(2)}, gate ${tuning.gate.toStringAsFixed(2)}, risposta V/B/M/A ${tuning.volumeWeight.toStringAsFixed(2)}/${tuning.bassWeight.toStringAsFixed(2)}/${tuning.midWeight.toStringAsFixed(2)}/${tuning.trebleWeight.toStringAsFixed(2)}.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 6),
-          SizedBox(
+          const SizedBox(
             width: double.infinity,
             child: FilledButton(
-              onPressed:
-                  source.isSupported &&
-                      DeviceController.I.isConnected &&
-                      !starting
-                  ? toggleAudio
-                  : null,
-              child: Text(
-                starting
-                    ? 'Attendi…'
-                    : (active ? 'Ferma audio' : 'Avvia audio del computer'),
-              ),
+              onPressed: null,
+              child: Text('Avvia audio del computer (non disponibile)'),
             ),
           ),
         ],
@@ -377,7 +257,4 @@ class _AudioFoundationPanelState extends State<AudioFoundationPanel> {
       ),
     ],
   );
-
-  String _meter(double? value) =>
-      value == null ? '—' : '${(value * 100).round()}%';
 }

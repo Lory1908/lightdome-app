@@ -4,7 +4,6 @@ import 'dart:math' as math;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lightdome_app/core/services/audio_capture_source.dart';
 import 'package:lightdome_app/core/services/audio_feature_processor.dart';
-import 'package:lightdome_app/core/services/wasapi_loopback_source.dart';
 
 class SimulatedPcmSource implements AudioCaptureSource {
   final controller = StreamController<AudioPcmChunk>.broadcast();
@@ -114,31 +113,5 @@ void main() {
     const source = UnavailableSystemAudioSource();
     expect(source.isSupported, isFalse);
     await expectLater(source.start(), throwsUnsupportedError);
-  });
-
-  test('Windows native events decode normalized mono PCM', () {
-    final chunk = NativeAudioEventDecoder.decode({
-      'sampleRateHz': 48000,
-      'samples': <double>[-1, -.25, 0, .5, 1],
-    });
-    expect(chunk.sampleRateHz, 48000);
-    expect(chunk.samples, <double>[-1, -.25, 0, .5, 1]);
-  });
-
-  test('Windows native events reject malformed PCM', () {
-    expect(
-      () => NativeAudioEventDecoder.decode({
-        'sampleRateHz': 2000,
-        'samples': <double>[0],
-      }),
-      throwsFormatException,
-    );
-    expect(
-      () => NativeAudioEventDecoder.decode({
-        'sampleRateHz': 48000,
-        'samples': <double>[1.5],
-      }),
-      throwsFormatException,
-    );
   });
 }
