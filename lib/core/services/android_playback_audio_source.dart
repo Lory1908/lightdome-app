@@ -93,6 +93,7 @@ class AndroidPlaybackAudioSource implements AudioCaptureSource {
     if (!isSupported) {
       return const AndroidAudioAvailability(supported: false, sdk: 0);
     }
+    _ensureListening();
     final result = await _bridge.checkAvailability();
     return AndroidAudioAvailability(
       supported: result['supported'] == true,
@@ -104,7 +105,22 @@ class AndroidPlaybackAudioSource implements AudioCaptureSource {
   Future<void> start() async {
     if (!isSupported) throw UnsupportedError(explanation);
     _intentionalStop = false;
-    await _eventsSubscription?.cancel();
+    _ensureListening();
+    if (_state.status != AndroidAudioStatus.running) {
+      _setState(AndroidAudioStatus.starting, 'In attesa del consenso Android…');
+    }
+    try {
+      await _bridge.start();
+    } catch (error) {
+      _setState(AndroidAudioStatus.error, _platformMessage(error));
+      await _eventsSubscription?.cancel();
+      _eventsSubscription = null;
+      rethrow;
+    }
+  }
+
+  void _ensureListening() {
+    if (_eventsSubscription != null) return;
     _eventsSubscription = _bridge.events.listen(
       _handleEvent,
       onError: (Object error, StackTrace stackTrace) {
@@ -112,6 +128,7 @@ class AndroidPlaybackAudioSource implements AudioCaptureSource {
         _frames.addError(error, stackTrace);
       },
       onDone: () {
+        _eventsSubscription = null;
         if (_state.status == AndroidAudioStatus.running) {
           _setState(
             AndroidAudioStatus.error,
@@ -121,15 +138,6 @@ class AndroidPlaybackAudioSource implements AudioCaptureSource {
         }
       },
     );
-    _setState(AndroidAudioStatus.starting, 'In attesa del consenso Android…');
-    try {
-      await _bridge.start();
-    } catch (error) {
-      _setState(AndroidAudioStatus.error, _platformMessage(error));
-      await _eventsSubscription?.cancel();
-      _eventsSubscription = null;
-      rethrow;
-    }
   }
 
   @override

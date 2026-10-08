@@ -150,4 +150,27 @@ void main() {
       await source.dispose();
     },
   );
+
+  test('availability attaches to an already-running native session', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    final bridge = FakeAndroidBridge();
+    final source = AndroidPlaybackAudioSource(bridge: bridge);
+
+    await source.checkAvailability();
+    bridge.controller.add({
+      'type': 'status',
+      'status': 'running',
+      'message': 'Audio ancora attivo',
+    });
+    await Future<void>.delayed(Duration.zero);
+    expect(source.state.status, AndroidAudioStatus.running);
+
+    await source.start();
+    expect(bridge.starts, 1);
+    expect(source.state.status, AndroidAudioStatus.running);
+
+    await source.stop();
+    await source.dispose();
+    await bridge.controller.close();
+  });
 }

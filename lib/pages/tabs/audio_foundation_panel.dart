@@ -258,7 +258,9 @@ class _AudioFoundationPanelState extends State<AudioFoundationPanel> {
               if (session.platformCandidate && supported)
                 SizedBox(
                   width: double.infinity,
-                  child: state.status == AndroidAudioStatus.running
+                  child:
+                      state.status == AndroidAudioStatus.running &&
+                          session.running
                       ? OutlinedButton.icon(
                           onPressed: _stop,
                           icon: const Icon(Icons.stop_rounded),
@@ -270,7 +272,9 @@ class _AudioFoundationPanelState extends State<AudioFoundationPanel> {
                               : _start,
                           icon: const Icon(Icons.play_arrow_rounded),
                           label: Text(
-                            DeviceController.I.isConnected
+                            state.status == AndroidAudioStatus.running
+                                ? 'Riprendi controllo audio'
+                                : DeviceController.I.isConnected
                                 ? 'Avvia audio del telefono'
                                 : 'Connetti prima la cupola',
                           ),
