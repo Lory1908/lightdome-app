@@ -248,7 +248,7 @@ class _CreatePageState extends State<CreatePage> {
                 Text(
                   _type == PatternRecipeType.organic
                       ? 'Indica quanto il movimento varia invece di ripetersi sempre uguale.'
-                      : 'Qualità alta · 150 aggiornamenti al secondo, scelta automaticamente.',
+                      : 'Qualità alta · 250 aggiornamenti al secondo, scelta automaticamente.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: scheme.onSurfaceVariant,
                   ),

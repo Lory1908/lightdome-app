@@ -48,7 +48,7 @@ void main() {
       randomness: 0,
     );
 
-    expect(recipe.sampleRateHz, 150);
-    expect(recipe.render(), hasLength(150));
+    expect(recipe.sampleRateHz, 250);
+    expect(recipe.render(), hasLength(250));
   });
 }
