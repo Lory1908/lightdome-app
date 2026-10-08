@@ -48,10 +48,11 @@ visible jumps. Stored programs continue to use their own sample timing.
 
 ## Audio contract
 
-Live audio processing stays on the phone or computer. A future transport can
-send volume, bass, mid, treble and beat features, with gain, gate, attack and
-release applied before or on the device. If that stream stops, the dome must
-fade out or switch to a configured stored fallback.
+Live playback-audio processing currently runs only in the Android 10+ app.
+Android sends transient mono PCM to Dart, where volume, bass, mid, treble and
+beat are calculated with gain, gate, attack and release. Only the resulting
+brightness is sent to the dome; PCM is never stored. If that stream stops, the
+dome fades out or switches to a configured stored fallback.
 
 ## AI authoring
 

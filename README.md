@@ -151,8 +151,9 @@ Per una build release destinata alla distribuzione occorre configurare un keysto
 
 - Flutter supporta la modifica delle ricette salvate tramite `/prog/meta`,
   con fallback esplicito per i file LDY legacy senza metadati.
-- La UI di audio di sistema è preparatoria: **nessuna cattura audio Windows è
-  attiva**. Vedi `docs/AUDIO_SYSTEM_FOUNDATION.md`.
+- L’app Android 10+ può acquisire, dopo consenso esplicito, l’audio riprodotto
+  dalle app che lo permettono. Web, iOS e desktop restano non supportati. Vedi
+  `docs/AUDIO_SYSTEM_FOUNDATION.md` e `docs/ANDROID_AUDIO_REPORT.md`.
 - Il watchdog firmware audio è opzionale e ancora da collaudare fisicamente.
   Vedi `docs/AUDIO_WATCHDOG.md`.
 - Schema, esempi e conversione sicura locale per ricette generate da LLM:
