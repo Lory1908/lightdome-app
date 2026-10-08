@@ -146,3 +146,16 @@ Per una build release destinata alla distribuzione occorre configurare un keysto
 - Upload `.ldy` con progress
 - OTA e reconnect automatico
 - WebSocket opzionale per ridurre polling
+
+## Preparazione software senza lampada (ottobre 2026)
+
+- Flutter supporta la modifica delle ricette salvate tramite `/prog/meta`,
+  con fallback esplicito per i file LDY legacy senza metadati.
+- La UI di audio di sistema è preparatoria: **nessuna cattura audio Windows è
+  attiva**. Vedi `docs/AUDIO_SYSTEM_FOUNDATION.md`.
+- Il watchdog firmware audio è opzionale e ancora da collaudare fisicamente.
+  Vedi `docs/AUDIO_WATCHDOG.md`.
+- Schema, esempi e conversione sicura locale per ricette generate da LLM:
+  `docs/llm-pattern-authoring/README.md`.
+- Manifest, icone e limiti iPhone/browser: `docs/WEB_IPHONE.md`.
+- I collaudi fisici restano in `docs/PATTERN_SYSTEM.md`.

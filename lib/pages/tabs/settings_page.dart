@@ -90,7 +90,7 @@ class _SettingsPageState extends State<SettingsPage> {
             TextField(
               controller: _ipCtrl,
               decoration: const InputDecoration(
-                labelText: 'Indirizzo IP o mDNS',
+                labelText: 'Indirizzo IP o lightdome.local',
                 hintText: 'es. 192.168.1.50 oppure http://lightdome.local',
               ),
               onSubmitted: (v) => ctrl.setIp(v.trim()),
@@ -127,8 +127,8 @@ class _SettingsPageState extends State<SettingsPage> {
             const SizedBox(height: 8),
             Text(
               kIsWeb
-                  ? 'Su Web la scoperta automatica non è disponibile; inserisci IP o mDNS manualmente.'
-                  : 'I dispositivi trovati in LAN vengono elencati qui sotto. Il più recente viene memorizzato automaticamente.',
+                  ? 'Nel browser inserisci lightdome.local o l’indirizzo IP della cupola. Alcuni browser potrebbero chiedere accesso alla rete locale.'
+                  : 'Puoi cercare i dispositivi o inserire l’indirizzo manualmente. L’ultimo indirizzo viene ricordato.',
             ),
           ],
         ),
@@ -527,8 +527,8 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             SizedBox(height: 8),
             Text(
-              'Il polling ora è integrato da un canale WebSocket opzionale per ridurre la latenza. '
-              'In caso di problemi torna disponibile automaticamente il fallback HTTP.',
+              'La cupola funziona nella rete locale, senza cloud. Se risulta offline, controlla Wi-Fi, indirizzo e alimentazione. '
+              'Telefono e cupola devono essere sulla stessa rete. Il controllo attuale usa HTTP.',
             ),
           ],
         ),
