@@ -12,6 +12,7 @@ class AudioStreamCoordinator {
     required this.sendLevel,
     required this.onAudioLost,
     this.onFeatures,
+    this.onStopped,
   });
 
   final AudioCaptureSource source;
@@ -19,6 +20,7 @@ class AudioStreamCoordinator {
   final Future<void> Function(double level) sendLevel;
   final Future<void> Function() onAudioLost;
   final void Function(AudioFeatures)? onFeatures;
+  final FutureOr<void> Function()? onStopped;
   StreamSubscription<AudioPcmChunk>? _subscription;
   bool _running = false;
   bool _lost = false;
@@ -86,8 +88,12 @@ class AudioStreamCoordinator {
     await sub?.cancel();
     try {
       await source.stop();
+    } catch (_) {
+      // The platform/event channel may already be detached. Cleanup and the
+      // firmware watchdog must still complete deterministically.
     } finally {
       await onAudioLost();
+      await onStopped?.call();
     }
   }
 }

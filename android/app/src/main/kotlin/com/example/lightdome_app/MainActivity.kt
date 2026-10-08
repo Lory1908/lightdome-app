@@ -29,7 +29,7 @@ class MainActivity : FlutterActivity(), MethodChannel.MethodCallHandler {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, METHOD_CHANNEL)
             .setMethodCallHandler(this)
         EventChannel(flutterEngine.dartExecutor.binaryMessenger, EVENT_CHANNEL)
-            .setStreamHandler(PlaybackCaptureBridge)
+            .setStreamHandler(PlaybackCaptureBridge.createStreamHandler())
     }
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {

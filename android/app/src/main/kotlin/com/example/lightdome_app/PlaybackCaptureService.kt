@@ -152,6 +152,7 @@ class PlaybackCaptureService : Service() {
         val samples = ShortArray(FRAME_SAMPLES)
         while (!stopping.get()) {
             val count = record.read(samples, 0, samples.size, AudioRecord.READ_BLOCKING)
+            if (stopping.get()) return
             if (count > 0) {
                 val bytes = ByteArray(count * 2)
                 for (index in 0 until count) {
@@ -186,13 +187,21 @@ class PlaybackCaptureService : Service() {
     private fun stopCaptureResources(stopProjection: Boolean) {
         val record = audioRecord
         audioRecord = null
+        val captureWorker = worker
+        worker = null
         try {
             record?.stop()
         } catch (_: IllegalStateException) {
         }
+        if (captureWorker != null && captureWorker !== Thread.currentThread()) {
+            captureWorker.interrupt()
+            try {
+                captureWorker.join(1_000)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+            }
+        }
         record?.release()
-        worker?.interrupt()
-        worker = null
         val currentProjection = projection
         projection = null
         currentProjection?.unregisterCallback(projectionCallback)

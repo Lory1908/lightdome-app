@@ -117,6 +117,7 @@ class AndroidPlaybackAudioSource implements AudioCaptureSource {
             AndroidAudioStatus.error,
             'La cattura audio è stata interrotta dal sistema.',
           );
+          _frames.addError(StateError(_state.message));
         }
       },
     );

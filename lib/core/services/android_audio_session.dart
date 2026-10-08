@@ -70,7 +70,8 @@ class AndroidAudioSession extends ChangeNotifier {
         'Audio del telefono richiede Android 10 o successivo.',
       );
     }
-    final coordinator = AudioStreamCoordinator(
+    late final AudioStreamCoordinator coordinator;
+    coordinator = AudioStreamCoordinator(
       source: source,
       processor: processor,
       sendLevel: DeviceController.I.sendAudioLevel,
@@ -80,6 +81,13 @@ class AndroidAudioSession extends ChangeNotifier {
       onFeatures: (next) {
         features = next;
         notifyListeners();
+      },
+      onStopped: () {
+        if (identical(_coordinator, coordinator)) {
+          _coordinator = null;
+          features = null;
+          notifyListeners();
+        }
       },
     );
     _coordinator = coordinator;

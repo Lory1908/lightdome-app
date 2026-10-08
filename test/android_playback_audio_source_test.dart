@@ -81,4 +81,73 @@ void main() {
     expect(source.isSupported, isFalse);
     expect(source.explanation, contains('Android 10'));
   });
+
+  test(
+    'initial stopped status is harmless, revocation after running is an error',
+    () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      final bridge = FakeAndroidBridge();
+      final source = AndroidPlaybackAudioSource(bridge: bridge);
+      final errors = <Object>[];
+      final subscription = source.frames.listen(
+        (_) {},
+        onError: (Object error) => errors.add(error),
+      );
+
+      await source.start();
+      bridge.controller.add({
+        'type': 'status',
+        'status': 'stopped',
+        'message': 'Audio non attivo',
+      });
+      await Future<void>.delayed(Duration.zero);
+      expect(errors, isEmpty);
+
+      bridge.controller.add({
+        'type': 'status',
+        'status': 'running',
+        'message': 'Audio attivo',
+      });
+      bridge.controller.add({
+        'type': 'status',
+        'status': 'stopped',
+        'message': 'Consenso revocato',
+      });
+      await Future<void>.delayed(Duration.zero);
+      expect(errors, hasLength(1));
+
+      await source.stop();
+      await subscription.cancel();
+      await source.dispose();
+      await bridge.controller.close();
+    },
+  );
+
+  test(
+    'event channel loss becomes an audio error after capture starts',
+    () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      final bridge = FakeAndroidBridge();
+      final source = AndroidPlaybackAudioSource(bridge: bridge);
+      final error = Completer<Object>();
+      final subscription = source.frames.listen(
+        (_) {},
+        onError: (Object value) => error.complete(value),
+      );
+
+      await source.start();
+      bridge.controller.add({
+        'type': 'status',
+        'status': 'running',
+        'message': 'Audio attivo',
+      });
+      await Future<void>.delayed(Duration.zero);
+      await bridge.controller.close();
+
+      expect(await error.future, isA<StateError>());
+      await source.stop();
+      await subscription.cancel();
+      await source.dispose();
+    },
+  );
 }

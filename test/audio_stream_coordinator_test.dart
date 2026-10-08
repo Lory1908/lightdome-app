@@ -7,7 +7,10 @@ import 'package:lightdome_app/core/services/audio_feature_processor.dart';
 import 'package:lightdome_app/core/services/audio_stream_coordinator.dart';
 
 class TestCapture implements AudioCaptureSource {
+  TestCapture({this.stopThrows = false});
+
   final controller = StreamController<AudioPcmChunk>();
+  final bool stopThrows;
   bool started = false;
   @override
   String get label => 'test';
@@ -25,6 +28,7 @@ class TestCapture implements AudioCaptureSource {
   @override
   Future<void> stop() async {
     started = false;
+    if (stopThrows) throw StateError('platform detached');
     await controller.close();
   }
 }
@@ -34,6 +38,7 @@ void main() {
     final fake = TestCapture();
     final levels = <double>[];
     var lost = 0;
+    var stopped = 0;
     final session = AudioStreamCoordinator(
       source: fake,
       processor: AudioFeatureProcessor(),
@@ -43,6 +48,7 @@ void main() {
       onAudioLost: () async {
         lost++;
       },
+      onStopped: () => stopped++,
     );
     await session.start();
     fake.controller.add(
@@ -57,8 +63,10 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 30));
     expect(session.running, isFalse);
     expect(lost, 1);
+    expect(stopped, 1);
     await session.stop();
     expect(lost, 1);
+    expect(stopped, 1);
   });
 
   test('rapid frames are coalesced and network sends never overlap', () async {
@@ -94,5 +102,26 @@ void main() {
     expect(maxActiveSends, 1);
     expect(totalSends, lessThan(10));
     await session.stop();
+  });
+
+  test('cleanup completes once when platform stop throws', () async {
+    final fake = TestCapture(stopThrows: true);
+    var lost = 0;
+    var stopped = 0;
+    final session = AudioStreamCoordinator(
+      source: fake,
+      processor: AudioFeatureProcessor(),
+      sendLevel: (_) async {},
+      onAudioLost: () async => lost++,
+      onStopped: () => stopped++,
+    );
+
+    await session.start();
+    await session.stop();
+
+    expect(session.running, isFalse);
+    expect(lost, 1);
+    expect(stopped, 1);
+    await fake.controller.close();
   });
 }
