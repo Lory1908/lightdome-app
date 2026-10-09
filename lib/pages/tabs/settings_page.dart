@@ -538,6 +538,28 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _runDiscovery() async {
     await DeviceDirectory.I.discover();
+    if (!mounted) return;
+    final found = DeviceDirectory.I.discovered;
+    if (found.length == 1) {
+      final device = found.single;
+      _ipCtrl.text = device.baseUrl;
+      DeviceController.I.setIp(device.baseUrl);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${device.label} trovata. Connessione in corso…')),
+      );
+    } else if (found.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Nessuna cupola trovata. Controlla che sia accesa e sulla stessa rete.',
+          ),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${found.length} dispositivi trovati.')),
+      );
+    }
   }
 
   Future<void> _renameEntry(

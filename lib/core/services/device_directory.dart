@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:multicast_dns/multicast_dns.dart';
 
 import '../models/device_entry.dart';
@@ -12,6 +13,9 @@ class DeviceDirectory extends ChangeNotifier {
   DeviceDirectory._();
 
   static const _prefsKey = 'device_directory';
+  static const _discoveryChannel = MethodChannel(
+    'lightdome/network_discovery',
+  );
 
   final List<DeviceEntry> _saved = [];
   final List<DeviceEntry> _discovered = [];
@@ -91,8 +95,13 @@ class DeviceDirectory extends ChangeNotifier {
 
     final mdns = MDnsClient();
     final Map<String, DeviceEntry> found = {};
+    final needsAndroidMulticastLock =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
     try {
+      if (needsAndroidMulticastLock) {
+        await _discoveryChannel.invokeMethod<void>('acquireMulticastLock');
+      }
       await mdns.start();
       final ptrStream = mdns.lookup<PtrResourceRecord>(ResourceRecordQuery.serverPointer('_http._tcp.local'));
       final ptrSub = ptrStream.listen((ptr) {
@@ -119,6 +128,11 @@ class DeviceDirectory extends ChangeNotifier {
       // Discovery failure is non-fatal.
     } finally {
       mdns.stop();
+      if (needsAndroidMulticastLock) {
+        try {
+          await _discoveryChannel.invokeMethod<void>('releaseMulticastLock');
+        } catch (_) {}
+      }
       _discovering = false;
     }
 

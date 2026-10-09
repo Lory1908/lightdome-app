@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
+import android.net.wifi.WifiManager
 import android.os.Build
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.engine.FlutterEngine
@@ -18,11 +19,13 @@ class MainActivity : FlutterActivity(), MethodChannel.MethodCallHandler {
     companion object {
         private const val METHOD_CHANNEL = "lightdome/audio_playback_capture"
         private const val EVENT_CHANNEL = "lightdome/audio_playback_capture/events"
+        private const val DISCOVERY_CHANNEL = "lightdome/network_discovery"
         private const val PERMISSION_REQUEST = 8041
         private const val PROJECTION_REQUEST = 8042
     }
 
     private var pendingStartResult: MethodChannel.Result? = null
+    private var multicastLock: WifiManager.MulticastLock? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -30,6 +33,39 @@ class MainActivity : FlutterActivity(), MethodChannel.MethodCallHandler {
             .setMethodCallHandler(this)
         EventChannel(flutterEngine.dartExecutor.binaryMessenger, EVENT_CHANNEL)
             .setStreamHandler(PlaybackCaptureBridge.createStreamHandler())
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DISCOVERY_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "acquireMulticastLock" -> {
+                        acquireMulticastLock()
+                        result.success(null)
+                    }
+                    "releaseMulticastLock" -> {
+                        releaseMulticastLock()
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+    }
+
+    private fun acquireMulticastLock() {
+        if (multicastLock?.isHeld == true) return
+        val wifi = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+        multicastLock = wifi.createMulticastLock("LightDomeDiscovery").apply {
+            setReferenceCounted(false)
+            acquire()
+        }
+    }
+
+    private fun releaseMulticastLock() {
+        multicastLock?.let { if (it.isHeld) it.release() }
+        multicastLock = null
+    }
+
+    override fun onDestroy() {
+        releaseMulticastLock()
+        super.onDestroy()
     }
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
