@@ -1,12 +1,28 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:path_provider/path_provider.dart';
+
 class PrefsBackend {
   late final File _file;
   Map<String, dynamic> _cache = {};
 
   Future<void> init() async {
-    _file = File(_prefsFilePath());
+    final legacyFile = File(_prefsFilePath());
+    if (Platform.isAndroid || Platform.isIOS) {
+      final support = await getApplicationSupportDirectory();
+      _file = File(
+        '${support.path}${Platform.pathSeparator}lightdome-prefs.json',
+      );
+      if (!await _file.exists() &&
+          legacyFile.path != _file.path &&
+          await legacyFile.exists()) {
+        await _file.parent.create(recursive: true);
+        await legacyFile.copy(_file.path);
+      }
+    } else {
+      _file = legacyFile;
+    }
     try {
       if (await _file.exists()) {
         final txt = await _file.readAsString();
@@ -49,10 +65,13 @@ class PrefsBackend {
     String base;
     final home = Platform.environment['HOME'];
     if (Platform.isWindows) {
-      final appData = Platform.environment['APPDATA'] ?? home ?? Directory.systemTemp.path;
+      final appData =
+          Platform.environment['APPDATA'] ?? home ?? Directory.systemTemp.path;
       base = '$appData${sep}LightDome';
     } else if (Platform.isLinux) {
-      final cfg = Platform.environment['XDG_CONFIG_HOME'] ?? (home != null ? '$home$sep.config' : Directory.systemTemp.path);
+      final cfg =
+          Platform.environment['XDG_CONFIG_HOME'] ??
+          (home != null ? '$home$sep.config' : Directory.systemTemp.path);
       base = '$cfg${sep}lightdome';
     } else if (Platform.isMacOS || Platform.isIOS) {
       final h = home ?? Directory.systemTemp.path;

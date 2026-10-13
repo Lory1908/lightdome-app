@@ -211,6 +211,10 @@ void enterLiveMode() {
     programPlaying = false;
     if (progFile)
       progFile.close();
+    programName = "";
+    sampleRateHz = 0;
+    frameCount = 0;
+    frameIndex = 0;
   }
   if (ramPlaying)
     ramPlaying = false;

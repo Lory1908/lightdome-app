@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../controllers/device_controller.dart';
@@ -13,6 +15,42 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage> {
   double _localLevel = 0;
   bool _dragging = false;
+  bool _awaitingRemote = false;
+  Timer? _releaseTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    DeviceController.I.addListener(_handleRemoteState);
+  }
+
+  void _handleRemoteState() {
+    if (!_awaitingRemote) return;
+    if ((DeviceController.I.state.y - _localLevel).abs() <= 0.006) {
+      _releaseTimer?.cancel();
+      _awaitingRemote = false;
+      if (mounted) setState(() {});
+    }
+  }
+
+  @override
+  void dispose() {
+    DeviceController.I.removeListener(_handleRemoteState);
+    _releaseTimer?.cancel();
+    super.dispose();
+  }
+
+  void _holdLocalUntilConfirmed() {
+    _releaseTimer?.cancel();
+    setState(() {
+      _dragging = false;
+      _awaitingRemote = true;
+    });
+    _releaseTimer = Timer(const Duration(seconds: 2), () {
+      if (!mounted) return;
+      setState(() => _awaitingRemote = false);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -21,7 +59,8 @@ class _DashboardPageState extends State<DashboardPage> {
       animation: ctrl,
       builder: (context, _) {
         final state = ctrl.state;
-        if (!_dragging) _localLevel = state.y.clamp(0.0, 1.0);
+        final holdLocal = _dragging || _awaitingRemote;
+        if (!holdLocal) _localLevel = state.y.clamp(0.0, 1.0);
         final metrics = <Widget>[
           _metricCard(
             context,
@@ -48,7 +87,7 @@ class _DashboardPageState extends State<DashboardPage> {
               _patternSummary(ctrl.pattern),
               Icons.graphic_eq_rounded,
             ),
-          if (state.programName?.isNotEmpty == true)
+          if (state.mode == 'program' && state.programName?.isNotEmpty == true)
             _metricCard(
               context,
               'Programma',
@@ -64,52 +103,66 @@ class _DashboardPageState extends State<DashboardPage> {
             ),
         ];
 
-        return RefreshIndicator(
-          onRefresh: ctrl.refreshOnce,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final columns = constraints.maxWidth >= 820 ? 3 : 2;
-              const gap = 12.0;
-              final available = constraints.maxWidth - 32;
-              final cardWidth = (available - gap * (columns - 1)) / columns;
-              return ListView(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
-                children: [
-                  Text(
-                    'La tua luce',
-                    style: Theme.of(context).textTheme.headlineMedium,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Controllo essenziale, risposta immediata.',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+        final targetLevel = (holdLocal ? _localLevel : state.y).clamp(0.0, 1.0);
+        return TweenAnimationBuilder<double>(
+          tween: Tween<double>(end: targetLevel),
+          duration: holdLocal
+              ? Duration.zero
+              : const Duration(milliseconds: 240),
+          curve: Curves.linear,
+          builder: (context, displayLevel, _) => RefreshIndicator(
+            onRefresh: ctrl.refreshOnce,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final columns = constraints.maxWidth >= 820 ? 3 : 2;
+                const gap = 12.0;
+                final available = constraints.maxWidth - 32;
+                final cardWidth = (available - gap * (columns - 1)) / columns;
+                return ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
+                  children: [
+                    Text(
+                      'La tua luce',
+                      style: Theme.of(context).textTheme.headlineMedium,
                     ),
-                  ),
-                  const SizedBox(height: 18),
-                  _heroCard(context, ctrl),
-                  const SizedBox(height: 14),
-                  Wrap(
-                    spacing: gap,
-                    runSpacing: gap,
-                    children: [
-                      for (final metric in metrics)
-                        SizedBox(width: cardWidth, child: metric),
-                    ],
-                  ),
-                ],
-              );
-            },
+                    const SizedBox(height: 4),
+                    Text(
+                      'Controllo essenziale, risposta immediata.',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    _heroCard(context, ctrl, displayLevel, holdLocal),
+                    const SizedBox(height: 14),
+                    Wrap(
+                      spacing: gap,
+                      runSpacing: gap,
+                      children: [
+                        for (final metric in metrics)
+                          SizedBox(width: cardWidth, child: metric),
+                      ],
+                    ),
+                  ],
+                );
+              },
+            ),
           ),
         );
       },
     );
   }
 
-  Widget _heroCard(BuildContext context, DeviceController ctrl) {
+  Widget _heroCard(
+    BuildContext context,
+    DeviceController ctrl,
+    double displayLevel,
+    bool holdLocal,
+  ) {
     final scheme = Theme.of(context).colorScheme;
     final state = ctrl.state;
-    final level = (state.y * 100).clamp(0, 100).round();
+    final level = (displayLevel * 100).clamp(0, 100).round();
+    final isProgram = state.mode == 'program';
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(22),
@@ -124,7 +177,9 @@ class _DashboardPageState extends State<DashboardPage> {
               height: lampSize,
               decoration: BoxDecoration(
                 color: state.on
-                    ? scheme.primary.withValues(alpha: 0.24 + state.y * 0.26)
+                    ? scheme.primary.withValues(
+                        alpha: 0.24 + displayLevel * 0.26,
+                      )
                     : scheme.surfaceContainerHigh,
                 shape: BoxShape.circle,
                 border: Border.all(
@@ -135,7 +190,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     ? [
                         BoxShadow(
                           color: scheme.primary.withValues(
-                            alpha: 0.30 + state.y * 0.24,
+                            alpha: 0.30 + displayLevel * 0.24,
                           ),
                           blurRadius: 54,
                           spreadRadius: 7,
@@ -170,7 +225,11 @@ class _DashboardPageState extends State<DashboardPage> {
                     ),
                   ),
                   Text(
-                    state.on ? 'ANTEPRIMA' : 'SPENTA',
+                    !state.on
+                        ? 'SPENTA'
+                        : isProgram
+                        ? (state.programName?.toUpperCase() ?? 'PATTERN')
+                        : 'MANUALE',
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: state.on
                           ? scheme.primary
@@ -209,7 +268,11 @@ class _DashboardPageState extends State<DashboardPage> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  state.on ? 'Cupola accesa' : 'Cupola spenta',
+                  !state.on
+                      ? 'Cupola spenta'
+                      : isProgram
+                      ? 'Pattern ${state.programName ?? 'in esecuzione'}'
+                      : 'Controllo manuale',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
@@ -264,19 +327,28 @@ class _DashboardPageState extends State<DashboardPage> {
                   children: [
                     const Text('Intensità'),
                     const Spacer(),
-                    Text('${(_localLevel * 100).round()}%'),
+                    Text(
+                      '${((holdLocal ? _localLevel : displayLevel) * 100).round()}%',
+                    ),
                   ],
                 ),
                 Slider(
-                  value: _localLevel,
-                  onChangeStart: (_) => setState(() => _dragging = true),
+                  value: holdLocal ? _localLevel : displayLevel,
+                  onChangeStart: (_) {
+                    _releaseTimer?.cancel();
+                    setState(() {
+                      _localLevel = displayLevel;
+                      _dragging = true;
+                      _awaitingRemote = false;
+                    });
+                  },
                   onChanged: (value) {
                     setState(() => _localLevel = value);
                     ctrl.sendY(value);
                   },
                   onChangeEnd: (value) {
                     ctrl.sendY(value);
-                    setState(() => _dragging = false);
+                    _holdLocalUntilConfirmed();
                   },
                 ),
                 Wrap(
@@ -287,8 +359,13 @@ class _DashboardPageState extends State<DashboardPage> {
                       FilledButton.tonal(
                         onPressed: () {
                           final value = level / 100;
-                          setState(() => _localLevel = value);
+                          setState(() {
+                            _localLevel = value;
+                            _dragging = true;
+                            _awaitingRemote = false;
+                          });
                           ctrl.sendY(value);
+                          _holdLocalUntilConfirmed();
                         },
                         child: Text(level == 0 ? 'Off' : '$level%'),
                       ),

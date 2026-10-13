@@ -26,6 +26,7 @@ class DeviceController extends ChangeNotifier {
   StatePoller? _poller;
   PatternRunner? _runner;
   RealtimeService? _realtime;
+  Timer? _pollResumeTimer;
 
   DeviceState state = DeviceState.initial();
   PatternConfig _pattern = const PatternConfig.none();
@@ -60,6 +61,7 @@ class DeviceController extends ChangeNotifier {
     _ip = next;
     final base = _ip.startsWith('http') ? _ip : 'http://$_ip';
     _poller?.stop();
+    _pollResumeTimer?.cancel();
     _live?.dispose();
     _runner?.dispose();
     unawaited(_realtime?.dispose());
@@ -99,6 +101,7 @@ class DeviceController extends ChangeNotifier {
       unawaited(api.startProgram(fb).catchError((_) {}));
     }
     _poller?.stop();
+    _pollResumeTimer?.cancel();
     _poller = null;
     _live?.dispose();
     _live = null;
@@ -161,6 +164,21 @@ class DeviceController extends ChangeNotifier {
 
   void sendY(double y01) {
     if (_live != null) {
+      // The ESP8266 serves one HTTP request at a time. Polling while a slider
+      // is streaming values can block commands and make the real light pause,
+      // then jump to the newest queued level. Keep the channel command-only
+      // until the gesture has been idle long enough for the final value to land.
+      _poller?.stop();
+      _pollResumeTimer?.cancel();
+      _pollResumeTimer = Timer(const Duration(milliseconds: 700), () {
+        if (_api != null) {
+          _poller?.start(
+            interval: _realtime == null
+                ? const Duration(milliseconds: 200)
+                : const Duration(seconds: 1),
+          );
+        }
+      });
       _live!.setY(y01);
     } else {
       SignalMonitor.I.pushTx(y01);
@@ -340,8 +358,14 @@ class DeviceController extends ChangeNotifier {
 
   Future<void> restoreLastDevice() async {
     final saved = await Prefs.getString('device_ip');
-    if (saved != null && saved.trim().isNotEmpty) {
-      setIp(saved);
+    final fallback = DeviceDirectory.I.saved.isNotEmpty
+        ? DeviceDirectory.I.saved.first.baseUrl
+        : null;
+    final lastDevice = (saved != null && saved.trim().isNotEmpty)
+        ? saved
+        : fallback;
+    if (lastDevice != null && lastDevice.trim().isNotEmpty) {
+      setIp(lastDevice);
     }
     // Legacy local/live modes must never resume automatically on app launch.
     // Stored programs run autonomously on the dome; microphone and playback
