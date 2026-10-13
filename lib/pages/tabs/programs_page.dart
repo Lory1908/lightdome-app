@@ -149,6 +149,7 @@ class _ProgramsPageState extends State<ProgramsPage> {
         micRelease: _release,
         gammaComp: true,
       ),
+      persist: false,
     );
     if (mounted) {
       setState(

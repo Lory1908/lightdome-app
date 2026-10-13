@@ -55,9 +55,6 @@ class DeviceController extends ChangeNotifier {
       unawaited(DeviceDirectory.I.markSeen(base));
       _runner ??= PatternRunner(api: _api, onLocalY: _handleLocalPatternY);
       _runner!.setApi(_api);
-      if (_pattern.type != PatternType.none) {
-        _runner!.restart(_pattern);
-      }
       return;
     }
     _ip = next;
@@ -90,10 +87,6 @@ class DeviceController extends ChangeNotifier {
     // Persist for next launches
     unawaited(Prefs.setString('device_ip', _ip));
     unawaited(DeviceDirectory.I.addOrUpdate(base));
-    // Re-apply saved pattern when (re)connecting
-    if (_pattern.type != PatternType.none) {
-      _runner?.start(_pattern);
-    }
     notifyListeners();
   }
 
@@ -350,20 +343,14 @@ class DeviceController extends ChangeNotifier {
     if (saved != null && saved.trim().isNotEmpty) {
       setIp(saved);
     }
-    final p = await Prefs.getString('pattern_cfg');
-    if (p != null) {
-      try {
-        _pattern = PatternConfig.fromJsonString(p);
-      } catch (_) {
-        _pattern = const PatternConfig.none();
-      }
-    }
+    // Legacy local/live modes must never resume automatically on app launch.
+    // Stored programs run autonomously on the dome; microphone and playback
+    // capture require an explicit user action for every session.
+    _pattern = const PatternConfig.none();
+    await Prefs.remove('pattern_cfg');
     _fallbackProgram = await Prefs.getString('fallback_program');
     _runner ??= PatternRunner(api: _api, onLocalY: _handleLocalPatternY);
     _runner!.setApi(_api);
-    if (_pattern.type != PatternType.none) {
-      _runner!.start(_pattern);
-    }
   }
 
   // Build and upload program from local audio file (open provider)
