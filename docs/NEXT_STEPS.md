@@ -3,24 +3,16 @@
 ## Checkpoint 2026-10-14
 
 The Android app currently installed on the Galaxy Z Flip8 is the stable
-`c9bb257` build. Manual brightness control, automatic reconnect and the
-`respiro` pattern were physically verified with the lamp and are usable.
+`8c21605` build. Manual brightness control, automatic reconnect, the `respiro`
+pattern and normal non-DRM phone-audio response were physically verified with
+the lamp and are usable.
 
-Resume the phone-audio validation from here:
+Remaining phone-audio validation:
 
-1. Start **Audio del telefono** and share the **entire screen**.
-2. Play the prepared non-DRM file
-   `J:\data\lightdome\test-audio\lightdome-capture-check.wav` on the phone.
-   It contains 2 seconds of silence, then 4 seconds each of bass, mid and high
-   tones, followed by 8 seconds of pulsing bass.
-3. Normal non-DRM music capture, background operation and smooth paced output
-   are physically verified in build `8c21605`. If refining audio further, add
-   broadband transient detection for sparse metronome clicks and compare a
-   lower-latency transport against the stable HTTP baseline.
-4. Repeat with the app in the background and with the phone locked/unlocked.
-5. Verify explicit stop, permission revocation, Wi-Fi loss and the firmware
+1. Repeat with the phone locked/unlocked.
+2. Verify permission revocation, Wi-Fi loss and the firmware
    fade/fallback watchdog.
-6. Run a 20-minute session and check latency, heat, battery and reconnects.
+3. Run a 20-minute session and check heat, battery and reconnects.
 
 The first real-phone capture session proved that the foreground service stays
 active in the background and the lamp enters audio-stream mode. Spotify shared
@@ -69,8 +61,8 @@ mobile/PWA metadata needed for adding it to an iPhone Home Screen.
 
 The remaining work needs either a real device or release credentials:
 
-1. Test Android 10+ playback capture on a real phone with multiple capturable
-   apps and verify volume, bass, mid, treble and beat response on the lamp.
+1. Complete the optional Audio v2 adaptive calibration and low-latency work
+   described above.
 2. Verify the audio watchdog on real hardware: fade out or start the selected
    local fallback after permission revocation, app closure and network loss.
 3. Test installation from Safari and normal controls on an iPhone. Audio
