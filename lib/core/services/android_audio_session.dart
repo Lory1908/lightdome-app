@@ -56,6 +56,7 @@ class AndroidAudioSession extends ChangeNotifier {
   }
 
   void updateTuning(AudioTuning tuning) {
+    if (processor.tuning.adaptive != tuning.adaptive) processor.reset();
     processor.tuning = tuning;
   }
 

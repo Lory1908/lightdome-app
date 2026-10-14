@@ -33,6 +33,27 @@ AudioPcmChunk sine(double hz, double amplitude) {
   );
 }
 
+AudioPcmChunk mixedTone() {
+  const rate = 16000;
+  return AudioPcmChunk(
+    List.generate(
+      1024,
+      (i) =>
+          .28 * math.sin(i * 2 * math.pi * 110 / rate) +
+          .28 * math.sin(i * 2 * math.pi * 750 / rate) +
+          .28 * math.sin(i * 2 * math.pi * 4400 / rate),
+    ),
+    rate,
+  );
+}
+
+AudioPcmChunk click(double amplitude) {
+  final samples = List<double>.filled(1024, 0);
+  samples[510] = amplitude;
+  samples[511] = -amplitude;
+  return AudioPcmChunk(samples, 16000);
+}
+
 void main() {
   test('bass vs treble energy can be classified without OS audio', () {
     final bass = AudioFeatureProcessor().process(sine(110, .8));
@@ -85,6 +106,63 @@ void main() {
       bassOnly.process(sine(110, .8)).intensity,
       greaterThan(trebleOnly.process(sine(110, .8)).intensity),
     );
+  });
+
+  test('broadband transients are detected even without strong bass', () {
+    final processor = AudioFeatureProcessor();
+    for (var i = 0; i < 4; i++) {
+      processor.process(sine(4400, .005));
+    }
+    expect(processor.process(click(.9)).beat, isTrue);
+  });
+
+  test('adaptive calibration recognizes music, beat and a steady tone', () {
+    AudioFeatures calibrate(
+      AudioFeatureProcessor processor,
+      AudioPcmChunk chunk,
+    ) {
+      late AudioFeatures features;
+      for (var i = 0; i < 32; i++) {
+        features = processor.process(chunk);
+      }
+      return features;
+    }
+
+    final music = calibrate(
+      AudioFeatureProcessor(tuning: const AudioTuning(adaptive: true)),
+      mixedTone(),
+    );
+    final tone = calibrate(
+      AudioFeatureProcessor(tuning: const AudioTuning(adaptive: true)),
+      sine(4400, .6),
+    );
+    final beatProcessor = AudioFeatureProcessor(
+      tuning: const AudioTuning(adaptive: true),
+    );
+    late AudioFeatures beat;
+    for (var i = 0; i < 32; i++) {
+      beat = beatProcessor.process(i.isEven ? sine(110, .8) : sine(110, 0));
+    }
+
+    expect(music.profile, AudioResponseProfile.music);
+    expect(tone.profile, AudioResponseProfile.tone);
+    expect(beat.profile, AudioResponseProfile.beat);
+  });
+
+  test('adaptive music keeps the proven manual response', () {
+    final adaptive = AudioFeatureProcessor(
+      tuning: const AudioTuning(adaptive: true),
+    );
+    final manual = AudioFeatureProcessor();
+    late AudioFeatures automaticResult;
+    late AudioFeatures manualResult;
+    for (var i = 0; i < 40; i++) {
+      automaticResult = adaptive.process(mixedTone());
+      manualResult = manual.process(mixedTone());
+    }
+
+    expect(automaticResult.profile, AudioResponseProfile.music);
+    expect(automaticResult.intensity, closeTo(manualResult.intensity, .0001));
   });
 
   test('invalid PCM rejected', () {

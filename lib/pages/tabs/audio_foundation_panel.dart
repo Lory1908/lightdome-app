@@ -22,6 +22,7 @@ class _AudioFoundationPanelState extends State<AudioFoundationPanel> {
   double midWeight = .15;
   double trebleWeight = .1;
   double beatBoost = .15;
+  bool adaptive = true;
   String? fallback;
   String? message;
   bool savingFallback = false;
@@ -47,6 +48,7 @@ class _AudioFoundationPanelState extends State<AudioFoundationPanel> {
     midWeight: midWeight,
     trebleWeight: trebleWeight,
     beatBoost: beatBoost,
+    adaptive: adaptive,
   );
 
   void _applyTuning() => session.updateTuning(tuning);
@@ -175,48 +177,75 @@ class _AudioFoundationPanelState extends State<AudioFoundationPanel> {
                       'Battito ${features?.beat == true ? 'sì' : '—'}',
                     ),
                   ),
+                  Chip(
+                    label: Text(
+                      adaptive
+                          ? 'Risposta ${features?.profile.label ?? 'Calibrazione…'}'
+                          : 'Risposta manuale',
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 8),
+              SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Adatta automaticamente alla sorgente'),
+                subtitle: const Text(
+                  'Riconosce musica, battiti e suoni singoli senza salvare l’audio.',
+                ),
+                value: adaptive,
+                onChanged: (next) {
+                  setState(() => adaptive = next);
+                  _applyTuning();
+                },
+              ),
               _slider('Sensibilità', gain, 0, 3, (v) => gain = v),
               _slider('Soglia rumore', gate, 0, .5, (v) => gate = v),
               _slider('Reazione in salita', attack, 0, 1, (v) => attack = v),
               _slider('Ritorno alla calma', release, 0, 1, (v) => release = v),
               _slider('Luce minima', min, 0, .9, (v) => min = v.clamp(0, max)),
               _slider('Luce massima', max, .1, 1, (v) => max = v.clamp(min, 1)),
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text('Risposta alle frequenze'),
-              ),
-              _slider(
-                'Influenza volume',
-                volumeWeight,
-                0,
-                1,
-                (v) => volumeWeight = v,
-              ),
-              _slider(
-                'Influenza bassi',
-                bassWeight,
-                0,
-                1,
-                (v) => bassWeight = v,
-              ),
-              _slider('Influenza medi', midWeight, 0, 1, (v) => midWeight = v),
-              _slider(
-                'Influenza alti',
-                trebleWeight,
-                0,
-                1,
-                (v) => trebleWeight = v,
-              ),
-              _slider(
-                'Spinta sul battito',
-                beatBoost,
-                0,
-                1,
-                (v) => beatBoost = v,
-              ),
+              if (!adaptive) ...[
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Risposta alle frequenze'),
+                ),
+                _slider(
+                  'Influenza volume',
+                  volumeWeight,
+                  0,
+                  1,
+                  (v) => volumeWeight = v,
+                ),
+                _slider(
+                  'Influenza bassi',
+                  bassWeight,
+                  0,
+                  1,
+                  (v) => bassWeight = v,
+                ),
+                _slider(
+                  'Influenza medi',
+                  midWeight,
+                  0,
+                  1,
+                  (v) => midWeight = v,
+                ),
+                _slider(
+                  'Influenza alti',
+                  trebleWeight,
+                  0,
+                  1,
+                  (v) => trebleWeight = v,
+                ),
+                _slider(
+                  'Spinta sul battito',
+                  beatBoost,
+                  0,
+                  1,
+                  (v) => beatBoost = v,
+                ),
+              ],
               Text(
                 'Se l’audio si interrompe, la cupola usa la dissolvenza o il pattern scelto qui sotto.',
                 style: TextStyle(color: scheme.onSurfaceVariant),
