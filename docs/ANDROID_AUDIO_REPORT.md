@@ -1,6 +1,6 @@
 # Android playback audio report
 
-Date: 2026-10-08  
+Date: 2026-10-14  
 Branch: `agent/pre-home-work`  
 Starting commit: `0563998`  
 Implementation commit: `8e2940e`
@@ -13,9 +13,28 @@ Playback audio capture is implemented only for the Android app on Android 10
 (API 29) or newer. No Windows, Web or iOS capture path is enabled. No request
 was sent to a lamp and no firmware was flashed.
 
-The feature is compiled and unit-tested, but it has **not** been validated with
-a real Android phone, a real media app or the lamp. It must not be described as
-physically tested until the manual checklist below is complete.
+The feature is compiled, unit-tested and partially validated on a real Samsung
+Galaxy Z Flip8 running Android 17/API 37 with the physical lamp. Permission,
+foreground-service, background and explicit-stop behavior passed. Spotify
+shared as a single app returned protected silence, so the end-to-end feature
+must not yet be described as validated with capturable audio.
+
+## Real-phone checkpoint (2026-10-14)
+
+- The release APK installed and launched successfully on the Galaxy Z Flip8.
+- Notification and MediaProjection consent completed normally.
+- App-specific sharing of Spotify kept the capture service alive after Spotify
+  moved to the foreground.
+- The lamp entered audio-stream mode and kept its network connection, proving
+  the Android-to-firmware session lifecycle was active.
+- Spotify supplied zero-valued audio throughout the sample; the app indicators
+  and lamp output correctly remained at zero. This is consistent with the
+  documented protected-content limitation and is not a positive audio-response
+  test.
+- Explicit stop removed `PlaybackCaptureService`; the lamp reported
+  `audioStreamActive: false`, `mode: idle`, and zero output.
+- The next run will use the prepared non-DRM 22-second test file documented in
+  `NEXT_STEPS.md`, shared through the entire-screen option.
 
 ## Architecture
 
@@ -146,10 +165,9 @@ PowerShell with the call operator, for example
 - If a live Dart EventChannel ends, the source raises an audio loss so the
   coordinator stops and the firmware watchdog can take over.
 
-## Risks still requiring a real phone
+## Remaining physical-test risks
 
-- Vendor-specific MediaProjection behavior and notification presentation.
-- Whether the chosen music/video app permits playback capture.
+- Whether a non-DRM player supplies usable PCM through whole-screen capture.
 - CPU, battery, thermal use and end-to-end latency during a long session.
 - Behavior when locking/unlocking the phone and moving between Wi-Fi networks.
 - Real HTTP throughput to the ESP8266 and visual smoothness of the lamp.
