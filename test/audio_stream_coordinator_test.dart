@@ -104,6 +104,42 @@ void main() {
     await session.stop();
   });
 
+  test('rapid frames are paced instead of saturating the device', () async {
+    final fake = TestCapture();
+    final sentAt = <Duration>[];
+    final clock = Stopwatch()..start();
+    final session = AudioStreamCoordinator(
+      source: fake,
+      processor: AudioFeatureProcessor(),
+      sendLevel: (_) async => sentAt.add(clock.elapsed),
+      onAudioLost: () async {},
+      minimumSendInterval: const Duration(milliseconds: 40),
+    );
+    await session.start();
+    for (var i = 0; i < 20; i++) {
+      fake.controller.add(
+        AudioPcmChunk(
+          List.generate(
+            512,
+            (sample) => math.sin(2 * math.pi * 100 * sample / 16000),
+          ),
+          16000,
+        ),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 4));
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+
+    expect(sentAt.length, inInclusiveRange(2, 4));
+    for (var i = 1; i < sentAt.length; i++) {
+      expect(
+        sentAt[i] - sentAt[i - 1],
+        greaterThanOrEqualTo(const Duration(milliseconds: 35)),
+      );
+    }
+    await session.stop();
+  });
+
   test('cleanup completes once when platform stop throws', () async {
     final fake = TestCapture(stopThrows: true);
     var lost = 0;

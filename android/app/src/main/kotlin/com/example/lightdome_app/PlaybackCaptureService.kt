@@ -133,7 +133,9 @@ class PlaybackCaptureService : Service() {
         )
         val nextRecord = AudioRecord.Builder()
             .setAudioFormat(format)
-            .setBufferSizeInBytes(maxOf(minimum, FRAME_SAMPLES * 2 * 4))
+            // Keep only the minimum stable PCM buffer. Four extra frames added
+            // avoidable latency before the Dart analyzer could react.
+            .setBufferSizeInBytes(maxOf(minimum, FRAME_SAMPLES * 2))
             .setAudioPlaybackCaptureConfig(captureConfig)
             .build()
         if (nextRecord.state != AudioRecord.STATE_INITIALIZED) {

@@ -283,6 +283,22 @@ class DeviceController extends ChangeNotifier {
   Future<void> sendAudioLevel(double level) async {
     final api = _api;
     if (api == null) throw StateError('Cupola non connessa');
+    // The ESP8266 handles a single HTTP request at a time. State polling while
+    // playback capture is streaming competes with level packets and makes the
+    // physical output pause, then jump to a late value. Keep the connection
+    // command-only while audio frames arrive and resume telemetry shortly
+    // after the final packet (including an unexpected capture loss).
+    _poller?.stop();
+    _pollResumeTimer?.cancel();
+    _pollResumeTimer = Timer(const Duration(milliseconds: 700), () {
+      if (_api != null) {
+        _poller?.start(
+          interval: _realtime == null
+              ? const Duration(milliseconds: 200)
+              : const Duration(seconds: 1),
+        );
+      }
+    });
     SignalMonitor.I.pushTx(level);
     await api.sendAudioY(level);
   }

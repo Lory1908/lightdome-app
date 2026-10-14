@@ -13,6 +13,7 @@ class AudioStreamCoordinator {
     required this.onAudioLost,
     this.onFeatures,
     this.onStopped,
+    this.minimumSendInterval = const Duration(milliseconds: 70),
   });
 
   final AudioCaptureSource source;
@@ -21,11 +22,14 @@ class AudioStreamCoordinator {
   final Future<void> Function() onAudioLost;
   final void Function(AudioFeatures)? onFeatures;
   final FutureOr<void> Function()? onStopped;
+  final Duration minimumSendInterval;
   StreamSubscription<AudioPcmChunk>? _subscription;
   bool _running = false;
   bool _lost = false;
   bool _sending = false;
   double? _pendingLevel;
+  final Stopwatch _sendClock = Stopwatch();
+  int? _lastSendMicroseconds;
 
   bool get running => _running;
 
@@ -34,6 +38,10 @@ class AudioStreamCoordinator {
     if (!source.isSupported) throw UnsupportedError(source.explanation);
     _lost = false;
     processor.reset();
+    _sendClock
+      ..reset()
+      ..start();
+    _lastSendMicroseconds = null;
     _subscription = source.frames.listen(
       (chunk) {
         if (!_running) return;
@@ -66,9 +74,19 @@ class AudioStreamCoordinator {
     _sending = true;
     try {
       while (_running && _pendingLevel != null) {
+        final lastSent = _lastSendMicroseconds;
+        if (lastSent != null) {
+          final elapsed = _sendClock.elapsedMicroseconds - lastSent;
+          final remaining = minimumSendInterval.inMicroseconds - elapsed;
+          if (remaining > 0) {
+            await Future<void>.delayed(Duration(microseconds: remaining));
+          }
+          if (!_running) break;
+        }
         final level = _pendingLevel!;
         _pendingLevel = null;
         await sendLevel(level);
+        _lastSendMicroseconds = _sendClock.elapsedMicroseconds;
       }
     } catch (_) {
       await _lose();
@@ -83,6 +101,7 @@ class AudioStreamCoordinator {
     _lost = true;
     _running = false;
     _pendingLevel = null;
+    _sendClock.stop();
     final sub = _subscription;
     _subscription = null;
     await sub?.cancel();
