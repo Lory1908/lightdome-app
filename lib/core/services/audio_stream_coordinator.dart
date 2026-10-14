@@ -14,6 +14,7 @@ class AudioStreamCoordinator {
     this.onFeatures,
     this.onStopped,
     this.minimumSendInterval = const Duration(milliseconds: 70),
+    this.networkRetryDelay = const Duration(milliseconds: 300),
   });
 
   final AudioCaptureSource source;
@@ -23,6 +24,7 @@ class AudioStreamCoordinator {
   final void Function(AudioFeatures)? onFeatures;
   final FutureOr<void> Function()? onStopped;
   final Duration minimumSendInterval;
+  final Duration networkRetryDelay;
   StreamSubscription<AudioPcmChunk>? _subscription;
   bool _running = false;
   bool _lost = false;
@@ -89,7 +91,10 @@ class AudioStreamCoordinator {
         _lastSendMicroseconds = _sendClock.elapsedMicroseconds;
       }
     } catch (_) {
-      await _lose();
+      // A temporary Wi-Fi outage must not revoke MediaProjection. Keep the
+      // capture session alive, let the firmware watchdog fade safely, and
+      // retry only the newest level at a modest cadence until the LAN returns.
+      if (_running) await Future<void>.delayed(networkRetryDelay);
     } finally {
       _sending = false;
       if (_running && _pendingLevel != null) unawaited(_drainLevels());

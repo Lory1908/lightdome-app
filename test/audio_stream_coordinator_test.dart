@@ -140,6 +140,46 @@ void main() {
     await session.stop();
   });
 
+  test(
+    'temporary network loss keeps capture alive and later recovers',
+    () async {
+      final fake = TestCapture();
+      var attempts = 0;
+      var delivered = 0;
+      final session = AudioStreamCoordinator(
+        source: fake,
+        processor: AudioFeatureProcessor(),
+        sendLevel: (_) async {
+          attempts++;
+          if (attempts <= 2) throw StateError('Wi-Fi unavailable');
+          delivered++;
+        },
+        onAudioLost: () async {},
+        minimumSendInterval: Duration.zero,
+        networkRetryDelay: const Duration(milliseconds: 20),
+      );
+      await session.start();
+      for (var i = 0; i < 5; i++) {
+        fake.controller.add(
+          AudioPcmChunk(
+            List.generate(
+              512,
+              (sample) => math.sin(2 * math.pi * 100 * sample / 16000),
+            ),
+            16000,
+          ),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 25));
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(session.running, isTrue);
+      expect(attempts, greaterThanOrEqualTo(3));
+      expect(delivered, greaterThan(0));
+      await session.stop();
+    },
+  );
+
   test('cleanup completes once when platform stop throws', () async {
     final fake = TestCapture(stopThrows: true);
     var lost = 0;
