@@ -9,7 +9,10 @@ The Android app currently installed on the Galaxy Z Flip8 is the stable
 Resume the phone-audio validation from here:
 
 1. Start **Audio del telefono** and share the **entire screen**.
-2. Play a non-DRM source (a local audio file or ordinary browser audio).
+2. Play the prepared non-DRM file
+   `J:\data\lightdome\test-audio\lightdome-capture-check.wav` on the phone.
+   It contains 2 seconds of silence, then 4 seconds each of bass, mid and high
+   tones, followed by 8 seconds of pulsing bass.
 3. Verify that volume, bass, mid, treble and beat indicators move, then check
    that the lamp follows them smoothly.
 4. Repeat with the app in the background and with the phone locked/unlocked.
