@@ -3,22 +3,24 @@
 ## Checkpoint 2026-10-14
 
 The Android app currently installed on the Galaxy Z Flip8 is the stable
-`8c21605` build. Manual brightness control, automatic reconnect, the `respiro`
+`859bf55` build. Manual brightness control, automatic reconnect, the `respiro`
 pattern and normal non-DRM phone-audio response were physically verified with
 the lamp and are usable.
 
 Remaining phone-audio validation:
 
-1. Repeat with the phone locked/unlocked.
-2. Verify permission revocation, Wi-Fi loss and the firmware
-   fade/fallback watchdog.
-3. Run a 20-minute session and check heat, battery and reconnects.
+1. Repeat the phone lock/unlock test using VLC or another source that continues
+   playback with the screen off; the YouTube attempt was inconclusive.
+2. Run a 20-minute session and check heat, battery and reconnects.
 
 The first real-phone capture session proved that the foreground service stays
-active in the background and the lamp enters audio-stream mode. Spotify shared
-as a single app produced protected silence (all values remained at zero), so it
-is not a valid functional source for the remaining test. The capture was
-stopped before ending the session.
+active in the background and the lamp enters audio-stream mode. Permission
+revocation and Wi-Fi loss both trigger the firmware safety fade. With build
+`859bf55`, capture now remains active through a temporary Wi-Fi outage and the
+lamp resumes automatically after reconnection without reopening the app or
+requesting screen-sharing consent again. Spotify shared as a single app
+produced protected silence (all values remained at zero), so it is not a valid
+functional source for the remaining test.
 
 ## Audio v2: low latency and instant adaptive calibration
 
@@ -63,8 +65,9 @@ The remaining work needs either a real device or release credentials:
 
 1. Complete the optional Audio v2 adaptive calibration and low-latency work
    described above.
-2. Verify the audio watchdog on real hardware: fade out or start the selected
-   local fallback after permission revocation, app closure and network loss.
+2. Add and verify the optional local-pattern fallback after an audio timeout;
+   the current safe fade-to-off watchdog and Wi-Fi recovery are physically
+   verified.
 3. Test installation from Safari and normal controls on an iPhone. Audio
    capture intentionally remains Android-only.
 4. Create the final Android application id, signing key and signed release.

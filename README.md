@@ -154,7 +154,9 @@ Per una build release destinata alla distribuzione occorre configurare un keysto
 - L’app Android 10+ può acquisire, dopo consenso esplicito, l’audio riprodotto
   dalle app che lo permettono. Web, iOS e desktop restano non supportati. Vedi
   `docs/AUDIO_SYSTEM_FOUNDATION.md` e `docs/ANDROID_AUDIO_REPORT.md`.
-- Il watchdog firmware audio è opzionale e ancora da collaudare fisicamente.
+- Il watchdog firmware audio sfuma la luce in sicurezza quando il flusso si
+  interrompe ed è collaudato anche durante una perdita temporanea del Wi-Fi;
+  l'app mantiene la cattura e riprende automaticamente al ritorno della rete.
   Vedi `docs/AUDIO_WATCHDOG.md`.
 - Schema, esempi e conversione sicura locale per ricette generate da LLM:
   `docs/llm-pattern-authoring/README.md`.
