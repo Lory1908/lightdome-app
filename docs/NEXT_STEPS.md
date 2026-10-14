@@ -3,7 +3,7 @@
 ## Checkpoint 2026-10-14
 
 The Android app currently installed on the Galaxy Z Flip8 is the stable
-`859bf55` build. Manual brightness control, automatic reconnect, the `respiro`
+`6ff6372` build. Manual brightness control, automatic reconnect, the `respiro`
 pattern and normal non-DRM phone-audio response were physically verified with
 the lamp and are usable.
 
@@ -22,25 +22,21 @@ requesting screen-sharing consent again. Spotify shared as a single app
 produced protected silence (all values remained at zero), so it is not a valid
 functional source for the remaining test.
 
+Automatic source adaptation is also physically usable: continuous music keeps
+the previously approved response, while sparse metronome clicks are recognized
+as **Battito** and receive a specialized response. Fine tuning is intentionally
+deferred until the final lamp hardware is available.
+
 ## Audio v2: low latency and instant adaptive calibration
 
 - Add a low-latency UDP level stream between the Android app and firmware,
   retaining the current paced HTTP path as a compatibility fallback.
 - Measure end-to-end latency on the physical lamp and choose packet cadence,
   interpolation and watchdog values from evidence rather than visual guesswork.
-- Add a short automatic calibration window that classifies the current source:
-  broadband music, bass/beat-heavy music, sparse percussive clicks, or a mostly
-  single-frequency tone.
-- For broadband music, use balanced volume and band energy with an optional
-  bass emphasis. For a single dominant sound, follow its dominant band instead
-  of allowing unrelated band weights to suppress it.
-- Detect broadband transients as well as bass transients so a metronome or
-  short click is not missed merely because it contains little bass.
-- Calibrate gain and noise gate from the recent signal floor and peaks, with
-  safe limits, hysteresis and slow re-evaluation so the selected response does
-  not jump between profiles during a song.
-- Show the detected response in plain language (for example **Musica**,
-  **Battito** or **Tono**) and always provide a manual override and reset.
+- The automatic calibration now classifies continuous music, sparse beats and
+  a dominant tone, detects broadband transients, adapts gate/gain only for
+  specialized sources, and exposes **Musica**, **Battito** or **Tono** with a
+  manual override. Revisit thresholds only with the final hardware.
 - Never store or upload captured PCM; calibration must use transient aggregate
   features only.
 
