@@ -28,6 +28,28 @@ as a single app produced protected silence (all values remained at zero), so it
 is not a valid functional source for the remaining test. The capture was
 stopped before ending the session.
 
+## Audio v2: low latency and instant adaptive calibration
+
+- Add a low-latency UDP level stream between the Android app and firmware,
+  retaining the current paced HTTP path as a compatibility fallback.
+- Measure end-to-end latency on the physical lamp and choose packet cadence,
+  interpolation and watchdog values from evidence rather than visual guesswork.
+- Add a short automatic calibration window that classifies the current source:
+  broadband music, bass/beat-heavy music, sparse percussive clicks, or a mostly
+  single-frequency tone.
+- For broadband music, use balanced volume and band energy with an optional
+  bass emphasis. For a single dominant sound, follow its dominant band instead
+  of allowing unrelated band weights to suppress it.
+- Detect broadband transients as well as bass transients so a metronome or
+  short click is not missed merely because it contains little bass.
+- Calibrate gain and noise gate from the recent signal floor and peaks, with
+  safe limits, hysteresis and slow re-evaluation so the selected response does
+  not jump between profiles during a song.
+- Show the detected response in plain language (for example **Musica**,
+  **Battito** or **Tono**) and always provide a manual override and reset.
+- Never store or upload captured PCM; calibration must use transient aggregate
+  features only.
+
 ## Waiting for access to the lamp
 
 - Flash and complete the physical 150/250/300 Hz comparison described in
