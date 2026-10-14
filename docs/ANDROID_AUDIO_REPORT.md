@@ -33,8 +33,18 @@ must not yet be described as validated with capturable audio.
   test.
 - Explicit stop removed `PlaybackCaptureService`; the lamp reported
   `audioStreamActive: false`, `mode: idle`, and zero output.
-- The next run will use the prepared non-DRM 22-second test file documented in
-  `NEXT_STEPS.md`, shared through the entire-screen option.
+- Whole-screen capture with non-DRM VLC and ordinary media was then validated
+  end to end. The original stream was visibly delayed and stepped because app
+  polling and unpaced audio HTTP writes saturated the single-request ESP8266
+  server.
+- Build `8c21605` suspends state polling during audio, retains only the newest
+  unsent level, caps transmission near 14 Hz and uses Android's minimum stable
+  capture buffer. On the physical lamp transitions became substantially
+  smoother and the response appeared acceptably synchronized with beat-heavy
+  audio.
+- A sparse metronome click is not detected on every hit because the current
+  beat detector is bass-oriented. Broadband transient detection and further
+  latency work remain optional tuning, not blockers for normal music.
 
 ## Architecture
 

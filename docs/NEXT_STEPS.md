@@ -13,8 +13,10 @@ Resume the phone-audio validation from here:
    `J:\data\lightdome\test-audio\lightdome-capture-check.wav` on the phone.
    It contains 2 seconds of silence, then 4 seconds each of bass, mid and high
    tones, followed by 8 seconds of pulsing bass.
-3. Verify that volume, bass, mid, treble and beat indicators move, then check
-   that the lamp follows them smoothly.
+3. Normal non-DRM music capture, background operation and smooth paced output
+   are physically verified in build `8c21605`. If refining audio further, add
+   broadband transient detection for sparse metronome clicks and compare a
+   lower-latency transport against the stable HTTP baseline.
 4. Repeat with the app in the background and with the phone locked/unlocked.
 5. Verify explicit stop, permission revocation, Wi-Fi loss and the firmware
    fade/fallback watchdog.
