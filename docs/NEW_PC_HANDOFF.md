@@ -19,6 +19,67 @@ flutter analyze
 flutter test
 ```
 
+## Software required on the new Windows PC
+
+### Essential for the Flutter Android/Web app
+
+- **Git 2.x**. The verified machine uses Git `2.52.0.windows.1`.
+- **Flutter stable 3.35.7**, which includes **Dart 3.9.2**. Add
+  `flutter\bin` to `PATH`; the project requires Dart `^3.9.2`.
+- **JDK 21 LTS**. Point Flutter at it with
+  `flutter config --jdk-dir="C:\path\to\jdk-21"`. The verified Android build
+  uses JDK 21 even if another Java version is the shell default.
+- **Android SDK** with command-line tools, Platform `android-36`, Build Tools
+  `36.1.0` and Platform Tools/ADB. Android Studio is optional if these are
+  installed separately.
+- Accept the Android SDK licences with `flutter doctor --android-licenses`.
+- **Microsoft Edge or Google Chrome** for Flutter Web testing. Edge is enough;
+  Visual Studio C++ components are not required because Windows desktop builds
+  are outside this project's scope.
+
+Recommended editor setup: VS Code with the Flutter, Dart and PlatformIO IDE
+extensions. The editor is optional for an agent that can call the command-line
+tools directly.
+
+### Essential for the ESP8266 board
+
+- **PlatformIO Core 6.2.x**, either through the PlatformIO IDE extension or its
+  own Python environment. The repository pins Espressif8266 platform `4.2.1`,
+  NodeMCU v2 and ArduinoJson `7.4.2`; PlatformIO downloads those dependencies.
+- **FTDI VCP USB driver** for the currently connected adapter
+  (`VID:PID 0403:6001`). It appeared as `COM4` on the original PC, but the port
+  number is not portable. If final hardware uses a CH340 or CP210x adapter,
+  install that adapter's driver instead.
+- A data-capable USB cable. Serial monitor speed is `115200`.
+
+### Phone connection
+
+- Android Platform Tools provide `adb`.
+- For wireless debugging, pair the new PC once with `adb pair IP:PAIR_PORT`,
+  then use `adb connect IP:DEBUG_PORT`. Android may change the debug port.
+- For USB debugging on the Galaxy phone, install Samsung's USB driver if
+  Windows does not expose the device to ADB.
+
+### Verification commands
+
+```powershell
+flutter doctor -v
+flutter pub get
+flutter analyze
+flutter test
+flutter build apk --release
+flutter build web
+
+pio --version
+pio run -d firmware
+pio device list
+pio run -d firmware -t upload --upload-port COM4
+pio device monitor -p COM4 -b 115200
+```
+
+Replace `COM4` with the port discovered on the new PC. Do not upload firmware
+until the current board has been identified and the build succeeds.
+
 ## Verified state
 
 - Flutter analysis is clean and all 40 automated tests pass.
