@@ -21,6 +21,14 @@ flutter test
 
 ## Software required on the new Windows PC
 
+### Agent access
+
+- Codex Desktop or Codex CLI, signed in and allowed to access the local clone.
+- GitHub authentication for `Lory1908/lightdome-app` if the repository is
+  private. Git Credential Manager or GitHub CLI are both suitable.
+- Give the agent this file as its first project context, together with the
+  repository `AGENTS.md` and machine-level workspace instructions when present.
+
 ### Essential for the Flutter Android/Web app
 
 - **Git 2.x**. The verified machine uses Git `2.52.0.windows.1`.
