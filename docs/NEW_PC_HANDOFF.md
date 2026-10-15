@@ -68,6 +68,23 @@ tools directly.
 - For USB debugging on the Galaxy phone, install Samsung's USB driver if
   Windows does not expose the device to ADB.
 
+### Remote hardware bridge (verified 2026-10-15)
+
+- The university laptop is reachable over Tailscale through the SSH alias
+  `lory-portable` as Windows user `loryc`.
+- Its Windows Mobile Hotspot uses `192.168.137.0/24`.
+- The ESP resolves as `lightdome.local`, was observed at `192.168.137.79`, and
+  its embedded web UI answered over HTTP. Treat the numeric address as dynamic.
+- The ESP FTDI adapter (`VID:PID 0403:6001`) is exposed on the laptop as
+  `COM5`. Re-discover the port before every upload instead of assuming it.
+- The Galaxy Z Flip8 was observed at `192.168.137.118`. Android wireless-debug
+  ports are temporary; read the current IP and port from Developer options.
+- The desktop's existing ADB identity can reach the phone through a local SSH
+  port forward to the laptop, so installing ADB on the laptop is optional.
+- Tailscale does not directly route the hotspot subnet. Run ESP/serial commands
+  on the laptop over SSH, or use an explicit SSH port forward.
+- Never store pairing codes, private keys or Wi-Fi credentials in this repo.
+
 ### Verification commands
 
 ```powershell
