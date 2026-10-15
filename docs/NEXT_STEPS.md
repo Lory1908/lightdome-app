@@ -27,6 +27,13 @@ the previously approved response, while sparse metronome clicks are recognized
 as **Battito** and receive a specialized response. Fine tuning is intentionally
 deferred until the final lamp hardware is available.
 
+On 2026-10-15 the microphone path was changed from temporary WAV recording to
+low-latency PCM streaming and moved onto the same paced network path as phone
+audio. The UI now shows whether it is listening, explains the controls and can
+restore recommended values. Automated tests pass; the final APK still needs a
+physical install/test because wireless ADB disconnected after the build. See
+`NEW_PC_HANDOFF.md` when continuing from another computer.
+
 ## Audio v2: low latency and instant adaptive calibration
 
 - Add a low-latency UDP level stream between the Android app and firmware,
