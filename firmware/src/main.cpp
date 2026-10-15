@@ -57,7 +57,10 @@ const char *MDNS_NAME = "lightdome";
 const char *WIFI_CONFIG_FILE = "/wifi.json";
 const char *WIFI_CONFIG_TEMP = "/wifi.json.tmp";
 const char *WIFI_CONFIG_BACKUP = "/wifi.json.bak";
-const uint32_t WIFI_CONNECT_TIMEOUT_MS = 15000;
+// A normal association completes in a few seconds. Eight seconds still leaves
+// margin for a busy access point while making the recovery SSID appear much
+// sooner when the saved network is unavailable.
+const uint32_t WIFI_CONNECT_TIMEOUT_MS = 8000;
 
 // ---- PIN USCITA (MONO CANALE) -------------------------------------------
 const int PIN_Y = D5; // D5/GPIO14

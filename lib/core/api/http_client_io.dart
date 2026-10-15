@@ -44,9 +44,14 @@ Future<String> postJson(
   Duration timeout = const Duration(seconds: 2),
 }) async {
   final uri = Uri.parse(url);
+  final bytes = utf8.encode(jsonEncode(body));
   final req = await _client.postUrl(uri).timeout(timeout);
   req.headers.set(HttpHeaders.contentTypeHeader, 'application/json');
-  req.add(utf8.encode(jsonEncode(body)));
+  // ESP8266WebServer does not reliably parse chunked request bodies. Setting
+  // the exact length keeps Wi-Fi provisioning compatible with the embedded
+  // endpoint instead of falling back to empty form fields.
+  req.contentLength = bytes.length;
+  req.add(bytes);
   final resp = await req.close().timeout(timeout);
   return _readResponse(resp, uri, timeout);
 }

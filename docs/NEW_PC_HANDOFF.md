@@ -73,8 +73,9 @@ tools directly.
 - The university laptop is reachable over Tailscale through the SSH alias
   `lory-portable` as Windows user `loryc`.
 - Its Windows Mobile Hotspot uses `192.168.137.0/24`.
-- The ESP resolves as `lightdome.local`, was observed at `192.168.137.79`, and
-  its embedded web UI answered over HTTP. Treat the numeric address as dynamic.
+- The ESP resolves as `lightdome.local`, was observed at `192.168.137.79` and
+  later `192.168.137.223`, and its embedded web UI answered over HTTP. Treat
+  the numeric address as dynamic.
 - The ESP FTDI adapter (`VID:PID 0403:6001`) is exposed on the laptop as
   `COM5`. Re-discover the port before every upload instead of assuming it.
 - The Galaxy Z Flip8 was observed at `192.168.137.118`. Android wireless-debug
@@ -135,9 +136,14 @@ last UI change because wireless ADB disconnected. First action on the new PC:
 
 - The ESP8266 appeared on the original PC as an FTDI USB serial device on
   `COM4`. The port number may differ on another PC.
-- At boot the firmware waits 15 seconds for the saved Wi-Fi, then starts
-  `LightDome-Setup`. A Wi-Fi loss after boot currently retries indefinitely and
-  does not automatically reopen the setup AP.
+- At boot the firmware waits 8 seconds for the saved Wi-Fi, then starts
+  `LightDome-Setup`. The setup portal was physically observed 8.45 seconds
+  after reset on 2026-10-15. A Wi-Fi loss after boot currently retries
+  indefinitely and does not automatically reopen the setup AP.
+- Android Wi-Fi provisioning now sends a fixed-length JSON request because the
+  ESP8266 server does not reliably parse chunked request bodies. Scanning and
+  saving credentials from the release app were physically verified on
+  2026-10-15; the board rebooted and rejoined `LORY-PORTABLE` successfully.
 - Next physical tasks: VLC lock/unlock test, 20-minute Android session,
   150/250/300 Hz PWM comparison, then optional UDP low-latency transport.
 - Final release tasks still need the chosen Android application id and signing
