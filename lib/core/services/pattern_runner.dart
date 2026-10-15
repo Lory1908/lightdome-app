@@ -16,10 +16,15 @@ class PatternRunner {
   bool _sending = false;
   double? _pending;
   final void Function(double y)? _onLocalY;
+  final Future<void> Function(double y)? _onMicY;
 
-  PatternRunner({DeviceApi? api, void Function(double y)? onLocalY})
-      : _api = api,
-        _onLocalY = onLocalY;
+  PatternRunner({
+    DeviceApi? api,
+    void Function(double y)? onLocalY,
+    Future<void> Function(double y)? onMicY,
+  }) : _api = api,
+       _onLocalY = onLocalY,
+       _onMicY = onMicY;
   MicReactiveService? _mic;
 
   void setApi(DeviceApi? api) {
@@ -40,15 +45,20 @@ class PatternRunner {
     // Mic reactive uses mic stream instead of timer
     if (cfg.type == PatternType.micReactive) {
       _mic ??= MicReactiveService();
-      _mic!.start((lvl) async {
-        var y = (cfg.offset + cfg.amplitude * lvl).clamp(0.0, 1.0);
-        y = _applyGammaComp(y);
-        SignalMonitor.I.pushTx(y);
-        if (_api == null) {
-          _onLocalY?.call(y);
-        }
-        _queueSend(y);
-      }, threshold: cfg.micThreshold ?? 0.05, attack: cfg.micAttack ?? 0.6, release: cfg.micRelease ?? 0.3);
+      _mic!.start(
+        (lvl) async {
+          var y = (cfg.offset + cfg.amplitude * lvl).clamp(0.0, 1.0);
+          y = _applyGammaComp(y);
+          SignalMonitor.I.pushTx(y);
+          if (_api == null) {
+            _onLocalY?.call(y);
+          }
+          _queueSend(y);
+        },
+        threshold: cfg.micThreshold ?? 0.05,
+        attack: cfg.micAttack ?? 0.6,
+        release: cfg.micRelease ?? 0.3,
+      );
       return;
     }
     if (cfg.type == PatternType.none) return;
@@ -163,7 +173,11 @@ class PatternRunner {
         final v = _pending!;
         _pending = null;
         try {
-          await _api!.setY(v);
+          if (_cfg.type == PatternType.micReactive && _onMicY != null) {
+            await _onMicY(v);
+          } else {
+            await _api!.setY(v);
+          }
         } catch (_) {}
         // small pacing to avoid flooding
         await Future.delayed(const Duration(milliseconds: 12));

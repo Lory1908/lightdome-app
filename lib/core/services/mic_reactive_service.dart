@@ -1,53 +1,52 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:record/record.dart';
-import 'package:path_provider/path_provider.dart';
 
 typedef MicLevelCallback = void Function(double y01);
 
+double pcm16Rms(Uint8List bytes) {
+  final sampleCount = bytes.lengthInBytes ~/ 2;
+  if (sampleCount == 0) return 0;
+  final data = ByteData.sublistView(bytes);
+  double energy = 0;
+  for (var i = 0; i < sampleCount; i++) {
+    final sample = data.getInt16(i * 2, Endian.little) / 32768.0;
+    energy += sample * sample;
+  }
+  return math.sqrt(energy / sampleCount).clamp(0.0, 1.0);
+}
+
 class MicReactiveService {
   final _rec = AudioRecorder();
-  StreamSubscription<Amplitude>? _sub;
+  StreamSubscription<Uint8List>? _sub;
 
   Future<bool> _ensure() async => await _rec.hasPermission();
 
   double _env = 0; // smoothed envelope 0..1
 
-  Future<void> start(MicLevelCallback onLevel, {double threshold = 0.05, double attack = 0.6, double release = 0.3}) async {
+  Future<void> start(
+    MicLevelCallback onLevel, {
+    double threshold = 0.02,
+    double attack = 0.65,
+    double release = 0.3,
+  }) async {
     if (!await _ensure()) return;
     if (await _rec.isRecording()) {
       await _rec.stop();
     }
-    // Some platforms require a non-null path; on Web we pass a dummy filename.
-    late final String path;
-    try {
-      if (!kIsWeb) {
-        final dir = await getTemporaryDirectory();
-        path = '${dir.path}/mic_${DateTime.now().millisecondsSinceEpoch}.wav';
-      } else {
-        path = 'mic_${DateTime.now().millisecondsSinceEpoch}.wav';
-      }
-    } catch (_) {
-      // Fallback to a simple filename if directories are unavailable
-      path = 'mic_${DateTime.now().millisecondsSinceEpoch}.wav';
-    }
+    _env = 0;
     const cfg = RecordConfig(
-      encoder: AudioEncoder.wav,
-      bitRate: 128000,
-      sampleRate: 44100,
+      encoder: AudioEncoder.pcm16bits,
+      sampleRate: 16000,
       numChannels: 1,
+      streamBufferSize: 1024,
     );
-    await _rec.start(cfg, path: path);
-    _sub?.cancel();
-    _sub = _rec.onAmplitudeChanged(const Duration(milliseconds: 30)).listen((amp) {
-      // amp.current in dBFS [-inf..0]
-      final db = amp.current.isFinite ? amp.current : -160.0;
-      // Convert to linear amplitude 0..1 (0 = silence)
-      var lin = math.pow(10.0, db / 20.0).toDouble();
-      if (!lin.isFinite || lin.isNaN) lin = 0.0;
-      lin = lin.clamp(0.0, 1.0);
+    final stream = await _rec.startStream(cfg);
+    await _sub?.cancel();
+    _sub = stream.listen((bytes) {
+      var lin = pcm16Rms(bytes);
       // Noise gate
       if (lin < threshold) lin = 0.0;
       // Attack/Release smoothing (EMA) on linear amplitude

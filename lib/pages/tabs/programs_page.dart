@@ -27,9 +27,10 @@ class _ProgramsPageState extends State<ProgramsPage> {
   double _uploadProgress = 0;
   bool _uploading = false;
   double _gain = 1;
-  double _threshold = .15;
+  double _threshold = .02;
   double _attack = .65;
   double _release = .3;
+  bool _micSettingsDirty = false;
 
   @override
   void initState() {
@@ -152,11 +153,39 @@ class _ProgramsPageState extends State<ProgramsPage> {
       persist: false,
     );
     if (mounted) {
-      setState(
-        () => _message =
-            'Microfono attivo. Questa modalità richiede che l’app resti aperta.',
-      );
+      setState(() {
+        _micSettingsDirty = false;
+        _message =
+            'Microfono attivo. Questa modalità richiede che l’app resti aperta.';
+      });
     }
+  }
+
+  Future<void> _stopMic() async {
+    await DeviceController.I.setPattern(
+      const PatternConfig.none(),
+      persist: false,
+    );
+    if (mounted) {
+      setState(() => _message = 'Microfono fermato.');
+    }
+  }
+
+  void _resetMicControls() {
+    setState(() {
+      _gain = 1;
+      _threshold = .02;
+      _attack = .65;
+      _release = .3;
+      _micSettingsDirty = true;
+    });
+  }
+
+  void _changeMicSetting(VoidCallback change) {
+    setState(() {
+      change();
+      _micSettingsDirty = true;
+    });
   }
 
   @override
@@ -165,234 +194,302 @@ class _ProgramsPageState extends State<ProgramsPage> {
     final scheme = Theme.of(context).colorScheme;
     return AnimatedBuilder(
       animation: controller,
-      builder: (context, _) => ListView(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'I tuoi pattern',
-                      style: Theme.of(context).textTheme.headlineMedium,
+      builder: (context, _) {
+        final micActive = controller.pattern.type == PatternType.micReactive;
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'I tuoi pattern',
+                        style: Theme.of(context).textTheme.headlineMedium,
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        'Vivono nella cupola e continuano senza telefono.',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton.filledTonal(
+                  tooltip: 'Aggiorna',
+                  onPressed: _loading ? null : _refresh,
+                  icon: const Icon(Icons.refresh_rounded),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            if (_loading) const LinearProgressIndicator(),
+            if (!_loading && _programs.isEmpty)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(26),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.auto_awesome_outlined,
+                        size: 38,
+                        color: scheme.primary,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'La libreria è vuota',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        'Apri “Crea” per costruire il primo pattern.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: scheme.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            for (final program in _programs) ...[
+              Card(
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 7,
+                  ),
+                  leading: CircleAvatar(
+                    backgroundColor: scheme.primary.withValues(alpha: .13),
+                    child: Icon(Icons.waves_rounded, color: scheme.primary),
+                  ),
+                  title: Text(
+                    program,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  subtitle: Text(
+                    controller.state.programName == program
+                        ? 'In esecuzione nella cupola'
+                        : 'Disponibile offline',
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: 'Modifica',
+                        onPressed: () => _edit(program),
+                        icon: const Icon(Icons.edit_outlined),
+                      ),
+                      IconButton.filledTonal(
+                        tooltip: 'Avvia',
+                        onPressed: () => controller.startProgram(program),
+                        icon: const Icon(Icons.play_arrow_rounded),
+                      ),
+                      IconButton(
+                        tooltip: 'Elimina',
+                        onPressed: () async {
+                          await controller.deleteProgram(program);
+                          await _refresh();
+                        },
+                        icon: const Icon(Icons.delete_outline_rounded),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 9),
+            ],
+            Card(
+              child: ExpansionTile(
+                leading: Icon(
+                  micActive ? Icons.mic_rounded : Icons.mic_none_rounded,
+                  color: micActive ? scheme.primary : null,
+                ),
+                title: const Text('Audio reattivo'),
+                subtitle: Text(
+                  micActive
+                      ? 'Microfono attivo · in ascolto'
+                      : 'Usa il microfono del telefono',
+                ),
+                childrenPadding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 220),
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: micActive
+                          ? scheme.primaryContainer
+                          : scheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                    const SizedBox(height: 5),
-                    Text(
-                      'Vivono nella cupola e continuano senza telefono.',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: scheme.onSurfaceVariant,
+                    child: Row(
+                      children: [
+                        Icon(
+                          micActive
+                              ? Icons.hearing_rounded
+                              : Icons.pause_circle_outline_rounded,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            micActive
+                                ? 'In ascolto: la luce sta seguendo i suoni intorno al telefono.'
+                                : 'Fermo: premi Avvia microfono per iniziare.',
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _slider(
+                    'Sensibilità',
+                    'Quanto amplifica i suoni. Alzala se la luce reagisce poco.',
+                    _gain,
+                    0,
+                    2,
+                    (value) => _changeMicSetting(() => _gain = value),
+                  ),
+                  _slider(
+                    'Soglia rumore',
+                    'Ignora i rumori più deboli. Alzala se reagisce anche nel silenzio.',
+                    _threshold,
+                    0,
+                    .15,
+                    (value) => _changeMicSetting(() => _threshold = value),
+                  ),
+                  _slider(
+                    'Reazione',
+                    'Velocità con cui la luce sale quando arriva un suono.',
+                    _attack,
+                    .05,
+                    1,
+                    (value) => _changeMicSetting(() => _attack = value),
+                  ),
+                  _slider(
+                    'Ritorno',
+                    'Velocità con cui la luce scende quando il suono finisce.',
+                    _release,
+                    .05,
+                    1,
+                    (value) => _changeMicSetting(() => _release = value),
+                  ),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: OutlinedButton.icon(
+                      onPressed: _resetMicControls,
+                      icon: const Icon(Icons.restart_alt_rounded),
+                      label: const Text('Ripristina valori consigliati'),
+                    ),
+                  ),
+                  if (micActive && _micSettingsDirty) ...[
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Hai modificato i valori: premi Applica modifiche.',
+                        style: TextStyle(color: scheme.primary),
                       ),
                     ),
                   ],
-                ),
-              ),
-              IconButton.filledTonal(
-                tooltip: 'Aggiorna',
-                onPressed: _loading ? null : _refresh,
-                icon: const Icon(Icons.refresh_rounded),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          if (_loading) const LinearProgressIndicator(),
-          if (!_loading && _programs.isEmpty)
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(26),
-                child: Column(
-                  children: [
-                    Icon(
-                      Icons.auto_awesome_outlined,
-                      size: 38,
-                      color: scheme.primary,
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'La modalità audio live si interrompe chiudendo l’app. I pattern salvati non hanno questa limitazione.',
                     ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'La libreria è vuota',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 5),
-                    Text(
-                      'Apri “Crea” per costruire il primo pattern.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: scheme.onSurfaceVariant),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          for (final program in _programs) ...[
-            Card(
-              child: ListTile(
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 18,
-                  vertical: 7,
-                ),
-                leading: CircleAvatar(
-                  backgroundColor: scheme.primary.withValues(alpha: .13),
-                  child: Icon(Icons.waves_rounded, color: scheme.primary),
-                ),
-                title: Text(
-                  program,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-                subtitle: Text(
-                  controller.state.programName == program
-                      ? 'In esecuzione nella cupola'
-                      : 'Disponibile offline',
-                ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      tooltip: 'Modifica',
-                      onPressed: () => _edit(program),
-                      icon: const Icon(Icons.edit_outlined),
-                    ),
-                    IconButton.filledTonal(
-                      tooltip: 'Avvia',
-                      onPressed: () => controller.startProgram(program),
-                      icon: const Icon(Icons.play_arrow_rounded),
-                    ),
-                    IconButton(
-                      tooltip: 'Elimina',
-                      onPressed: () async {
-                        await controller.deleteProgram(program);
-                        await _refresh();
-                      },
-                      icon: const Icon(Icons.delete_outline_rounded),
-                    ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: micActive
+                              ? (_micSettingsDirty ? _startMic : _stopMic)
+                              : _startMic,
+                          icon: Icon(
+                            micActive && !_micSettingsDirty
+                                ? Icons.stop_rounded
+                                : Icons.mic_rounded,
+                          ),
+                          label: Text(
+                            micActive
+                                ? _micSettingsDirty
+                                      ? 'Applica modifiche'
+                                      : 'Ferma microfono'
+                                : 'Avvia microfono',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 9),
-          ],
-          Card(
-            child: ExpansionTile(
-              leading: const Icon(Icons.graphic_eq_rounded),
-              title: const Text('Audio reattivo'),
-              subtitle: const Text('Usa il microfono di questo dispositivo'),
-              childrenPadding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-              children: [
-                _slider(
-                  'Sensibilità',
-                  _gain,
-                  0,
-                  2,
-                  (value) => setState(() => _gain = value),
-                ),
-                _slider(
-                  'Soglia rumore',
-                  _threshold,
-                  0,
-                  .5,
-                  (value) => setState(() => _threshold = value),
-                ),
-                _slider(
-                  'Attack',
-                  _attack,
-                  .05,
-                  1,
-                  (value) => setState(() => _attack = value),
-                ),
-                _slider(
-                  'Release',
-                  _release,
-                  .05,
-                  1,
-                  (value) => setState(() => _release = value),
-                ),
-                const Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'La modalità audio live si interrompe chiudendo l’app. I pattern salvati non hanno questa limitazione.',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: _startMic,
-                        icon: const Icon(Icons.mic_rounded),
-                        label: const Text('Avvia microfono'),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    OutlinedButton(
-                      onPressed: () => controller.setPattern(
-                        const PatternConfig.none(),
-                        persist: false,
-                      ),
-                      child: const Text('Ferma'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 9),
-          const AudioFoundationPanel(),
-          const SizedBox(height: 9),
-          Card(
-            child: ExpansionTile(
-              leading: const Icon(Icons.file_upload_outlined),
-              title: const Text('Importa file .ldy'),
-              subtitle: const Text('Per pattern creati fuori dall’app'),
-              childrenPadding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-              children: [
-                TextField(
-                  controller: _name,
-                  decoration: const InputDecoration(labelText: 'Nome'),
-                ),
-                const SizedBox(height: 10),
-                OutlinedButton.icon(
-                  onPressed: _uploading ? null : _pickFile,
-                  icon: const Icon(Icons.folder_open_rounded),
-                  label: Text(_file?.name ?? 'Scegli file'),
-                ),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Avvia dopo ogni riaccensione'),
-                  value: _autorun,
-                  onChanged: _uploading
-                      ? null
-                      : (value) => setState(() => _autorun = value),
-                ),
-                if (_uploading) LinearProgressIndicator(value: _uploadProgress),
-                const SizedBox(height: 10),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: _uploading ? null : _upload,
-                    icon: const Icon(Icons.save_alt_rounded),
-                    label: const Text('Importa nella cupola'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (_message != null) ...[
-            const SizedBox(height: 10),
+            const AudioFoundationPanel(),
+            const SizedBox(height: 9),
             Card(
-              color: scheme.secondary.withValues(alpha: .1),
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Text(_message!),
+              child: ExpansionTile(
+                leading: const Icon(Icons.file_upload_outlined),
+                title: const Text('Importa file .ldy'),
+                subtitle: const Text('Per pattern creati fuori dall’app'),
+                childrenPadding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+                children: [
+                  TextField(
+                    controller: _name,
+                    decoration: const InputDecoration(labelText: 'Nome'),
+                  ),
+                  const SizedBox(height: 10),
+                  OutlinedButton.icon(
+                    onPressed: _uploading ? null : _pickFile,
+                    icon: const Icon(Icons.folder_open_rounded),
+                    label: Text(_file?.name ?? 'Scegli file'),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Avvia dopo ogni riaccensione'),
+                    value: _autorun,
+                    onChanged: _uploading
+                        ? null
+                        : (value) => setState(() => _autorun = value),
+                  ),
+                  if (_uploading)
+                    LinearProgressIndicator(value: _uploadProgress),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: _uploading ? null : _upload,
+                      icon: const Icon(Icons.save_alt_rounded),
+                      label: const Text('Importa nella cupola'),
+                    ),
+                  ),
+                ],
               ),
             ),
+            if (_message != null) ...[
+              const SizedBox(height: 10),
+              Card(
+                color: scheme.secondary.withValues(alpha: .1),
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Text(_message!),
+                ),
+              ),
+            ],
           ],
-        ],
-      ),
+        );
+      },
     );
   }
 
   Widget _slider(
     String label,
+    String description,
     double value,
     double min,
     double max,
@@ -409,6 +506,15 @@ class _ProgramsPageState extends State<ProgramsPage> {
               style: const TextStyle(fontWeight: FontWeight.w700),
             ),
           ],
+        ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            description,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
         ),
         Slider(value: value, min: min, max: max, onChanged: onChanged),
       ],

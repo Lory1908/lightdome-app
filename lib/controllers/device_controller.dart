@@ -37,6 +37,12 @@ class DeviceController extends ChangeNotifier {
   PatternConfig get pattern => _pattern;
   String? get fallbackProgram => _fallbackProgram;
 
+  PatternRunner _createPatternRunner() => PatternRunner(
+    api: _api,
+    onLocalY: _handleLocalPatternY,
+    onMicY: sendAudioLevel,
+  );
+
   void setIp(String ip) {
     final next = ip.trim();
     if (next.isEmpty) {
@@ -54,7 +60,7 @@ class DeviceController extends ChangeNotifier {
       _attachRealtime(base);
       _poller?.start();
       unawaited(DeviceDirectory.I.markSeen(base));
-      _runner ??= PatternRunner(api: _api, onLocalY: _handleLocalPatternY);
+      _runner ??= _createPatternRunner();
       _runner!.setApi(_api);
       return;
     }
@@ -68,7 +74,7 @@ class DeviceController extends ChangeNotifier {
     _realtime = null;
     _api = DeviceApi(base);
     _live = LiveStreamService(_api!);
-    _runner = PatternRunner(api: _api, onLocalY: _handleLocalPatternY);
+    _runner = _createPatternRunner();
     _runner!.setApi(_api);
     SignalMonitor.I.reset();
     // Mark as connecting while we wait for the first poll.
@@ -349,13 +355,17 @@ class DeviceController extends ChangeNotifier {
 
   // Pattern management
   Future<void> setPattern(PatternConfig cfg, {bool persist = true}) async {
+    final wasMicReactive = _pattern.type == PatternType.micReactive;
     _pattern = cfg;
     if (persist) {
       await Prefs.setString('pattern_cfg', cfg.toJsonString());
     }
-    _runner ??= PatternRunner(api: _api, onLocalY: _handleLocalPatternY);
+    _runner ??= _createPatternRunner();
     _runner!.setApi(_api);
     _runner!.stop();
+    if (wasMicReactive && cfg.type != PatternType.micReactive) {
+      await stopAudioStream();
+    }
     if (cfg.type != PatternType.none) {
       _runner!.start(cfg);
     }
@@ -389,7 +399,7 @@ class DeviceController extends ChangeNotifier {
     _pattern = const PatternConfig.none();
     await Prefs.remove('pattern_cfg');
     _fallbackProgram = await Prefs.getString('fallback_program');
-    _runner ??= PatternRunner(api: _api, onLocalY: _handleLocalPatternY);
+    _runner ??= _createPatternRunner();
     _runner!.setApi(_api);
   }
 
